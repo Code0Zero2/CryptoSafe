@@ -12,7 +12,7 @@ from cryptosafe import __version__
 from cryptosafe.config import APP_NAME, APP_MODE, BASE_DIR
 from cryptosafe.common.errors import CryptoSafeError, AuthenticationError, CryptoOperationError, ValidationError
 from cryptosafe.common.logging_config import setup_logging
-from cryptosafe.app import init_app
+from cryptosafe.app import main
 
 class TestM0Foundation(unittest.TestCase):
     def test_version_and_metadata(self):
@@ -42,7 +42,7 @@ class TestM0Foundation(unittest.TestCase):
                 logger.removeHandler(handler)
 
     def test_app_init(self):
-        exit_code = init_app()
+        exit_code = main(["--cli-info"])
         self.assertEqual(exit_code, 0)
 
 if __name__ == "__main__":
