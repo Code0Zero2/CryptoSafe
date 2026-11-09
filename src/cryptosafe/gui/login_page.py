@@ -13,9 +13,10 @@ from PySide6.QtWidgets import (
 )
 
 class LoginPage(QWidget):
-    """Prototype Login Page with explicit DEMO labelling."""
+    """Login Page with real SQLite + Argon2id auth and simulated USB/Face markers."""
 
-    login_requested = Signal(str)
+    login_requested = Signal(str, str)
+    switch_to_register_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -46,8 +47,8 @@ class LoginPage(QWidget):
         subtitle.setStyleSheet("color: #64748B; font-size: 12px;")
         card_layout.addWidget(subtitle)
 
-        # Prominent Demo Banner
-        demo_banner = QLabel("STATUS: M1 GUI PROTOTYPE (SIMULASI)\nAutentikasi riil belum aktif.")
+        # Demo Banner
+        demo_banner = QLabel("STATUS: M2 AUTH AKTIF (SQLite + Argon2id)\nUSB Token & Face Recognition masih tahap simulasi.")
         demo_banner.setAlignment(Qt.AlignCenter)
         demo_banner.setStyleSheet(
             "background-color: #FEF3C7; color: #92400E; border: 1px solid #F59E0B; "
@@ -68,7 +69,7 @@ class LoginPage(QWidget):
         card_layout.addWidget(self.password_input)
 
         # Simulated Factors Status Box
-        factors_box = QGroupBox("Status Faktor Autentikasi Tambahan (Simulasi M1)")
+        factors_box = QGroupBox("Status Faktor Autentikasi Tambahan (Simulasi DEMO)")
         factors_layout = QVBoxLayout(factors_box)
         factors_layout.setSpacing(6)
 
@@ -85,18 +86,26 @@ class LoginPage(QWidget):
         # Error / Validation Label
         self.error_label = QLabel("")
         self.error_label.setAlignment(Qt.AlignCenter)
+        self.error_label.setWordWrap(True)
         self.error_label.setStyleSheet("color: #DC2626; font-size: 12px; font-weight: 500;")
         self.error_label.setVisible(False)
         card_layout.addWidget(self.error_label)
 
-        # Action Button
-        self.login_button = QPushButton("Masuk (Demo)")
+        # Action Buttons
+        self.login_button = QPushButton("Masuk")
         self.login_button.setStyleSheet(
             "background-color: #2563EB; color: white; padding: 10px; "
             "font-weight: bold; border-radius: 4px; font-size: 13px;"
         )
         self.login_button.clicked.connect(self._handle_login)
         card_layout.addWidget(self.login_button)
+
+        self.register_switch_button = QPushButton("Belum punya akun? Daftar sekarang")
+        self.register_switch_button.setStyleSheet(
+            "background: transparent; color: #2563EB; font-size: 12px; text-decoration: underline; border: none;"
+        )
+        self.register_switch_button.clicked.connect(self.switch_to_register_requested.emit)
+        card_layout.addWidget(self.register_switch_button)
 
         layout.addWidget(card)
 
@@ -105,12 +114,16 @@ class LoginPage(QWidget):
         password = self.password_input.text()
 
         if not username or not password:
-            self.error_label.setText("Username dan password tidak boleh kosong.")
-            self.error_label.setVisible(True)
+            self.show_error("Username dan password tidak boleh kosong.")
             return
 
         self.error_label.setVisible(False)
-        self.login_requested.emit(username)
+        self.login_requested.emit(username, password)
+
+    def show_error(self, message: str):
+        """Display error message to user."""
+        self.error_label.setText(message)
+        self.error_label.setVisible(True)
 
     def reset_fields(self):
         """Reset inputs and clear errors upon logout."""

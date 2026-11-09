@@ -6,8 +6,12 @@ from cryptosafe import __version__
 from cryptosafe.config import APP_NAME, APP_MODE
 from cryptosafe.common.logging_config import setup_logging
 from cryptosafe.gui.main_window import MainWindow
+from cryptosafe.database.connection import get_connection
+from cryptosafe.database.schema import init_db
+from cryptosafe.database.user_repository import UserRepository
+from cryptosafe.auth.auth_service import AuthService
 
-def create_app(args: list[str] | None = None) -> tuple[QApplication, MainWindow]:
+def create_app(args: list[str] | None = None, auth_service: AuthService | None = None) -> tuple[QApplication, MainWindow]:
     """Create or reuse QApplication and instantiate MainWindow."""
     setup_logging()
     
@@ -18,7 +22,13 @@ def create_app(args: list[str] | None = None) -> tuple[QApplication, MainWindow]
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(__version__)
 
-    window = MainWindow()
+    if auth_service is None:
+        conn = get_connection()
+        init_db(conn)
+        user_repo = UserRepository(conn)
+        auth_service = AuthService(user_repo)
+
+    window = MainWindow(auth_service=auth_service)
     return app, window
 
 def main(args: list[str] | None = None) -> int:
