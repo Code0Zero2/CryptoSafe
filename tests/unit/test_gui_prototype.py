@@ -57,8 +57,7 @@ class TestM1GuiPrototype(unittest.TestCase):
         self.assertIsNotNone(login_page.username_input)
         self.assertIsNotNone(login_page.password_input)
         self.assertIn("USB TOKEN", login_page.usb_status_label.text().upper())
-        self.assertIn("SIMULASI", login_page.face_status_label.text().upper())
-        self.assertIn("DEMO", login_page.face_status_label.text().upper())
+        self.assertIn("FACE RECOGNITION", login_page.face_status_label.text().upper())
 
     def test_empty_credentials_rejected(self):
         """Verifies empty username/password inputs are rejected."""

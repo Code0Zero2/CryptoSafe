@@ -6,6 +6,7 @@ from pathlib import Path
 from cryptosafe.common.errors import AuthenticationError, ValidationError
 from cryptosafe.auth.password_service import PasswordService
 from cryptosafe.auth.usb_token_service import UsbTokenService
+from cryptosafe.auth.face_service import FaceService
 from cryptosafe.database.user_repository import UserRepository, User
 
 logger = logging.getLogger("cryptosafe.auth")
@@ -18,10 +19,12 @@ class AuthService:
         user_repo: UserRepository,
         password_service: PasswordService | None = None,
         usb_service: UsbTokenService | None = None,
+        face_service: FaceService | None = None,
     ):
         self._user_repo = user_repo
         self._password_service = password_service or PasswordService()
         self._usb_service = usb_service
+        self._face_service = face_service
 
     def register_user(self, username: str, password: str, password_confirm: str) -> User:
         """Register a new user account."""
@@ -45,8 +48,9 @@ class AuthService:
         username: str,
         password: str,
         usb_token_path: Path | None = None,
+        face_image=None,
     ) -> User:
-        """Authenticate user by username, password, and USB token factor if enrolled.
+        """Authenticate user across active MFA factors: password, USB token, and face recognition.
 
         Uses generic error messages to prevent username enumeration for credentials.
         """
@@ -59,6 +63,7 @@ class AuthService:
             logger.warning("Authentication failed for provided username credentials.")
             raise AuthenticationError("Username atau password salah.")
 
+        # Factor 1: Password (Argon2id)
         if not self._password_service.verify_password(password, user.password_hash):
             logger.warning("Authentication failed: invalid credentials.")
             raise AuthenticationError("Username atau password salah.")
@@ -76,6 +81,16 @@ class AuthService:
             self._usb_service.verify_token(user.id, challenge.challenge_id, target_path)
             logger.info("MFA Step 2 (USB) passed for user: %s", user.username)
 
-        logger.info("User authenticated successfully: %s", user.username)
+        # Factor 3: Face Recognition Biometrics (if enrolled)
+        if self._face_service and self._face_service.has_active_profile(user.id):
+            target_image = face_image
+            if target_image is None:
+                # Capture from default camera
+                target_image = self._face_service.capture_camera_frame()
+
+            self._face_service.verify_face(user.id, target_image)
+            logger.info("MFA Step 3 (Face Biometrics) passed for user: %s", user.username)
+
+        logger.info("All authentication factors passed successfully for user: %s", user.username)
         return user
 

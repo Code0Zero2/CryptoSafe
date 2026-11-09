@@ -13,11 +13,13 @@ from PySide6.QtWidgets import (
 )
 
 class DashboardPage(QWidget):
-    """Dashboard Page with feature cards and USB MFA management."""
+    """Dashboard Page with feature cards and USB/Face MFA management."""
 
     logout_requested = Signal()
     enroll_usb_requested = Signal()
     revoke_usb_requested = Signal()
+    enroll_face_requested = Signal()
+    revoke_face_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -126,38 +128,56 @@ class DashboardPage(QWidget):
             "QFrame { background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 12px; }"
         )
         layout = QVBoxLayout(card)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
 
-        title_lbl = QLabel("Manajemen Kredensial USB (M3)")
+        title_lbl = QLabel("Manajemen Kredensial MFA (M3 & M4)")
         title_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #1E293B;")
         layout.addWidget(title_lbl)
 
-        desc_lbl = QLabel("Pengaturan autentikasi hardware/software USB challenge-response.")
-        desc_lbl.setWordWrap(True)
-        desc_lbl.setStyleSheet("font-size: 12px; color: #64748B;")
-        layout.addWidget(desc_lbl)
-
+        # USB section
         self.usb_token_status_label = QLabel("Status Token USB: Belum Terdaftar")
         self.usb_token_status_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #B45309;")
         layout.addWidget(self.usb_token_status_label)
 
-        btn_layout = QHBoxLayout()
+        usb_btn_layout = QHBoxLayout()
         self.enroll_usb_btn = QPushButton("Enroll USB")
         self.enroll_usb_btn.setStyleSheet(
-            "background-color: #059669; color: white; padding: 6px; border-radius: 4px; font-weight: bold; font-size: 11px;"
+            "background-color: #059669; color: white; padding: 5px; border-radius: 4px; font-weight: bold; font-size: 11px;"
         )
         self.enroll_usb_btn.clicked.connect(self.enroll_usb_requested.emit)
-        btn_layout.addWidget(self.enroll_usb_btn)
+        usb_btn_layout.addWidget(self.enroll_usb_btn)
 
         self.revoke_usb_btn = QPushButton("Revoke USB")
         self.revoke_usb_btn.setStyleSheet(
-            "background-color: #DC2626; color: white; padding: 6px; border-radius: 4px; font-weight: bold; font-size: 11px;"
+            "background-color: #DC2626; color: white; padding: 5px; border-radius: 4px; font-weight: bold; font-size: 11px;"
         )
         self.revoke_usb_btn.clicked.connect(self.revoke_usb_requested.emit)
         self.revoke_usb_btn.setEnabled(False)
-        btn_layout.addWidget(self.revoke_usb_btn)
+        usb_btn_layout.addWidget(self.revoke_usb_btn)
+        layout.addLayout(usb_btn_layout)
 
-        layout.addLayout(btn_layout)
+        # Face section
+        self.face_status_label = QLabel("Status Wajah: Belum Terdaftar")
+        self.face_status_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #B45309;")
+        layout.addWidget(self.face_status_label)
+
+        face_btn_layout = QHBoxLayout()
+        self.enroll_face_btn = QPushButton("Enroll Wajah")
+        self.enroll_face_btn.setStyleSheet(
+            "background-color: #2563EB; color: white; padding: 5px; border-radius: 4px; font-weight: bold; font-size: 11px;"
+        )
+        self.enroll_face_btn.clicked.connect(self.enroll_face_requested.emit)
+        face_btn_layout.addWidget(self.enroll_face_btn)
+
+        self.revoke_face_btn = QPushButton("Revoke Wajah")
+        self.revoke_face_btn.setStyleSheet(
+            "background-color: #DC2626; color: white; padding: 5px; border-radius: 4px; font-weight: bold; font-size: 11px;"
+        )
+        self.revoke_face_btn.clicked.connect(self.revoke_face_requested.emit)
+        self.revoke_face_btn.setEnabled(False)
+        face_btn_layout.addWidget(self.revoke_face_btn)
+        layout.addLayout(face_btn_layout)
+
         return card
 
     def set_usb_token_status(self, is_enrolled: bool, info: str = ""):
@@ -172,6 +192,19 @@ class DashboardPage(QWidget):
             self.usb_token_status_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #B45309;")
             self.enroll_usb_btn.setText("Enroll USB")
             self.revoke_usb_btn.setEnabled(False)
+
+    def set_face_profile_status(self, is_enrolled: bool, info: str = ""):
+        """Update Face biometric registration status."""
+        if is_enrolled:
+            self.face_status_label.setText(f"Status Wajah: Terdaftar ({info or 'Aktif'})")
+            self.face_status_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #059669;")
+            self.enroll_face_btn.setText("Pindai Ulang Wajah")
+            self.revoke_face_btn.setEnabled(True)
+        else:
+            self.face_status_label.setText("Status Wajah: Belum Terdaftar")
+            self.face_status_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #B45309;")
+            self.enroll_face_btn.setText("Enroll Wajah")
+            self.revoke_face_btn.setEnabled(False)
 
     def _create_feature_card(self, title: str, description: str, status: str) -> QFrame:
         card = QFrame()

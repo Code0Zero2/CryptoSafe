@@ -1,51 +1,61 @@
-"""Main application window container (M3)."""
+"""Main application window container (M4)."""
 
 import logging
 from pathlib import Path
-from PySide6.QtWidgets import QMainWindow, QStackedWidget
+from PySide6.QtWidgets import QMainWindow, QStackedWidget, QMessageBox
 from cryptosafe.config import DATA_DIR
 from cryptosafe.gui.login_page import LoginPage
 from cryptosafe.gui.register_page import RegisterPage
 from cryptosafe.gui.dashboard_page import DashboardPage
 from cryptosafe.auth.auth_service import AuthService
 from cryptosafe.auth.usb_token_service import UsbTokenService
+from cryptosafe.auth.face_service import FaceService
 from cryptosafe.database.connection import get_connection
 from cryptosafe.database.schema import init_db
 from cryptosafe.database.user_repository import UserRepository
 from cryptosafe.database.usb_repository import UsbRepository
+from cryptosafe.database.face_repository import FaceRepository
 from cryptosafe.common.errors import AuthenticationError, ValidationError
 
 logger = logging.getLogger("cryptosafe.gui")
 
 class MainWindow(QMainWindow):
-    """Main Application Window hosting Login, Register, and Dashboard pages with USB MFA."""
+    """Main Application Window hosting Login, Register, and Dashboard pages with USB & Face MFA."""
 
     def __init__(
         self,
         auth_service: AuthService | None = None,
         usb_service: UsbTokenService | None = None,
+        face_service: FaceService | None = None,
         parent=None,
     ):
         super().__init__(parent)
-        self.setWindowTitle("CRYPTOSAFE — Multi-Factor Cryptography Demonstrator [M3]")
+        self.setWindowTitle("CRYPTOSAFE — Multi-Factor Cryptography Demonstrator [M4]")
         self.resize(960, 680)
         self.setMinimumSize(800, 560)
 
-        if auth_service is not None and usb_service is None:
-            usb_service = getattr(auth_service, "_usb_service", None)
+        if auth_service is not None:
+            if usb_service is None:
+                usb_service = getattr(auth_service, "_usb_service", None)
+            if face_service is None:
+                face_service = getattr(auth_service, "_face_service", None)
 
-        if auth_service is None or usb_service is None:
+        if auth_service is None or usb_service is None or face_service is None:
             conn = get_connection()
             init_db(conn)
             user_repo = UserRepository(conn)
             usb_repo = UsbRepository(conn)
+            face_repo = FaceRepository(conn)
             if usb_service is None:
                 usb_service = UsbTokenService(usb_repo)
+            if face_service is None:
+                face_service = FaceService(face_repo)
             if auth_service is None:
-                auth_service = AuthService(user_repo, usb_service=usb_service)
+                auth_service = AuthService(user_repo, usb_service=usb_service, face_service=face_service)
 
         self._auth_service = auth_service
         self._usb_service = usb_service
+        self._face_service = face_service
         self._current_user = None
 
         self._setup_pages()
@@ -80,15 +90,19 @@ class MainWindow(QMainWindow):
         self.dashboard_page.logout_requested.connect(self._on_logout_requested)
         self.dashboard_page.enroll_usb_requested.connect(self._on_enroll_usb_requested)
         self.dashboard_page.revoke_usb_requested.connect(self._on_revoke_usb_requested)
+        self.dashboard_page.enroll_face_requested.connect(self._on_enroll_face_requested)
+        self.dashboard_page.revoke_face_requested.connect(self._on_revoke_face_requested)
 
     def _on_login_requested(self, username: str, password: str):
         try:
-            # Let auth_service handle password + USB challenge-response
+            # Let auth_service handle password + USB + Face challenge
             user = self._auth_service.authenticate_user(username, password)
             self._current_user = user
             self.dashboard_page.set_user(user.username)
-            has_token = self._usb_service.has_active_token(user.id)
-            self.dashboard_page.set_usb_token_status(has_token)
+            has_usb = self._usb_service.has_active_token(user.id)
+            has_face = self._face_service.has_active_profile(user.id)
+            self.dashboard_page.set_usb_token_status(has_usb)
+            self.dashboard_page.set_face_profile_status(has_face)
             self.login_page.reset_fields()
             self.stack.setCurrentIndex(1)
             logger.info("Session started for user: %s", user.username)
@@ -114,6 +128,36 @@ class MainWindow(QMainWindow):
         self._usb_service.revoke_token(self._current_user.id)
         self.dashboard_page.set_usb_token_status(False)
         self._refresh_usb_detection()
+
+    def _on_enroll_face_requested(self):
+        if not self._current_user:
+            return
+        # Informed consent confirmation
+        reply = QMessageBox.question(
+            self,
+            "Persetujuan Biometrik Wajah",
+            "Apakah Anda menyetujui pemindaian kamera dan penyimpanan template biometrik wajah terenkripsi?\n"
+            "Foto mentah tidak disimpan, hanya template fitur terenkripsi lokal.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            frame = self._face_service.capture_camera_frame()
+            self._face_service.enroll_face(self._current_user.id, frame, user_consent=True)
+            self.dashboard_page.set_face_profile_status(True)
+            QMessageBox.information(self, "Biometrik", "Pendaftaran profil biometrik wajah berhasil!")
+        except (AuthenticationError, ValidationError) as err:
+            QMessageBox.warning(self, "Gagal Pendaftaran Wajah", str(err))
+
+    def _on_revoke_face_requested(self):
+        if not self._current_user:
+            return
+        self._face_service.revoke_face(self._current_user.id)
+        self.dashboard_page.set_face_profile_status(False)
+        QMessageBox.information(self, "Biometrik", "Profil biometrik wajah berhasil dicabut.")
 
     def _on_switch_to_register(self):
         self.login_page.reset_fields()

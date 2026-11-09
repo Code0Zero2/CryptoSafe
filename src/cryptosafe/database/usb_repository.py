@@ -99,3 +99,4 @@ class UsbRepository:
                 (now_iso, user_id)
             )
             return cursor.rowcount > 0
+

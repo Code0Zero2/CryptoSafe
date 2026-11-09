@@ -48,7 +48,7 @@ class LoginPage(QWidget):
         card_layout.addWidget(subtitle)
 
         # Demo Banner
-        demo_banner = QLabel("STATUS: M3 AUTH AKTIF (Argon2id + USB Challenge-Response)\nFace Recognition masih tahap simulasi.")
+        demo_banner = QLabel("STATUS: M4 AUTH AKTIF (Argon2id + USB Challenge-Response + Face Recognition)\nSeluruh faktor multi-autentikasi aktif.")
         demo_banner.setAlignment(Qt.AlignCenter)
         demo_banner.setStyleSheet(
             "background-color: #ECFDF5; color: #065F46; border: 1px solid #10B981; "
@@ -77,8 +77,8 @@ class LoginPage(QWidget):
         self.usb_status_label.setStyleSheet("color: #B45309; font-size: 11px; font-weight: 500;")
         factors_layout.addWidget(self.usb_status_label)
 
-        self.face_status_label = QLabel("Face Recognition: Belum Diverifikasi (SIMULASI / DEMO)")
-        self.face_status_label.setStyleSheet("color: #6B7280; font-size: 11px;")
+        self.face_status_label = QLabel("Face Recognition: Kamera Siap (Aktif jika akun terdaftar)")
+        self.face_status_label.setStyleSheet("color: #4B5563; font-size: 11px; font-weight: 500;")
         factors_layout.addWidget(self.face_status_label)
 
         card_layout.addWidget(factors_box)

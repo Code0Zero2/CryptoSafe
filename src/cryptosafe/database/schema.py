@@ -3,7 +3,7 @@
 import sqlite3
 from datetime import datetime, timezone
 
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 MIGRATION_V1 = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -37,6 +37,21 @@ CREATE INDEX IF NOT EXISTS idx_usb_user_id ON usb_credentials(user_id);
 CREATE INDEX IF NOT EXISTS idx_usb_token_id ON usb_credentials(token_id);
 """
 
+MIGRATION_V3 = """
+CREATE TABLE IF NOT EXISTS face_profiles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    encrypted_template TEXT NOT NULL,
+    model_name TEXT NOT NULL,
+    model_version TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    consent_recorded_at TEXT NOT NULL,
+    revoked_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_face_user_id ON face_profiles(user_id);
+"""
+
 def init_db(conn: sqlite3.Connection) -> None:
     """Initialize or migrate the database schema."""
     with conn:
@@ -55,6 +70,14 @@ def init_db(conn: sqlite3.Connection) -> None:
         if not cur.fetchone():
             cur.execute(
                 "INSERT INTO schema_version (version, applied_at) VALUES (2, ?)",
+                (now_iso,)
+            )
+
+        conn.executescript(MIGRATION_V3)
+        cur.execute("SELECT version FROM schema_version WHERE version = 3")
+        if not cur.fetchone():
+            cur.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (3, ?)",
                 (now_iso,)
             )
 
