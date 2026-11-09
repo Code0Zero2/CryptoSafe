@@ -1,0 +1,2 @@
+"""CRYPTOSAFE GUI package."""
+

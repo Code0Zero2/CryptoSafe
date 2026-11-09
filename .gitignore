@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+venv/
+.venv/
+env/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.secret
+secrets/
+token_data/
+logs/
+*.log
+
+# Local databases and user data
+*.db
+*.sqlite
+*.sqlite3
+storage/
+user_data/
+biometric_data/
+
+# Generated encrypted files and test artifacts
+*.enc
+*.cryptosafe
+test_output/
+dist/
+build/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+logs/
+*.log
