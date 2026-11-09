@@ -52,13 +52,12 @@ class TestM1GuiPrototype(unittest.TestCase):
         self.assertIsInstance(self.window.stack.currentWidget(), LoginPage)
 
     def test_login_fields_and_demo_labels_exist(self):
-        """Verifies inputs and simulated status indicators with DEMO labels exist."""
+        """Verifies inputs and status indicators with appropriate labels exist."""
         login_page = self.window.login_page
         self.assertIsNotNone(login_page.username_input)
         self.assertIsNotNone(login_page.password_input)
-        self.assertIn("SIMULASI", login_page.usb_status_label.text().upper())
+        self.assertIn("USB TOKEN", login_page.usb_status_label.text().upper())
         self.assertIn("SIMULASI", login_page.face_status_label.text().upper())
-        self.assertIn("DEMO", login_page.usb_status_label.text().upper())
         self.assertIn("DEMO", login_page.face_status_label.text().upper())
 
     def test_empty_credentials_rejected(self):

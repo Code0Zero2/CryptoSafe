@@ -112,3 +112,4 @@ class RegisterPage(QWidget):
         self.password_input.clear()
         self.confirm_password_input.clear()
         self.message_label.setVisible(False)
+

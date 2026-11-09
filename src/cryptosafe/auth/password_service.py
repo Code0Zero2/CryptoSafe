@@ -31,3 +31,4 @@ class PasswordService:
             return self._hasher.verify(encoded_hash, password)
         except (VerifyMismatchError, VerificationError, InvalidHashError):
             return False
+

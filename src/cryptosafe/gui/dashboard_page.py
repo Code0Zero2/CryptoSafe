@@ -13,9 +13,11 @@ from PySide6.QtWidgets import (
 )
 
 class DashboardPage(QWidget):
-    """Prototype Dashboard Page with feature cards and logout navigation."""
+    """Dashboard Page with feature cards and USB MFA management."""
 
     logout_requested = Signal()
+    enroll_usb_requested = Signal()
+    revoke_usb_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -102,11 +104,6 @@ class DashboardPage(QWidget):
                 "Ledger lokal hash chain berbasis SHA-256 untuk mendeteksi perubahan aset.",
                 "Milestone M10 — Direncanakan"
             ),
-            (
-                "Manajemen Kredensial Multi-Faktor",
-                "Pendaftaran token USB dan template verifikasi wajah lokal.",
-                "Milestones M3 & M4 — Direncanakan"
-            ),
         ]
 
         for idx, (title, desc, status) in enumerate(features):
@@ -115,8 +112,66 @@ class DashboardPage(QWidget):
             card = self._create_feature_card(title, desc, status)
             grid.addWidget(card, row, col)
 
+        # Dedicated M3 USB Credential Card
+        mfa_card = self._create_mfa_card()
+        grid.addWidget(mfa_card, 2, 1)
+
         scroll.setWidget(container)
         main_layout.addWidget(scroll)
+
+    def _create_mfa_card(self) -> QFrame:
+        card = QFrame()
+        card.setFrameShape(QFrame.StyledPanel)
+        card.setStyleSheet(
+            "QFrame { background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 12px; }"
+        )
+        layout = QVBoxLayout(card)
+        layout.setSpacing(8)
+
+        title_lbl = QLabel("Manajemen Kredensial USB (M3)")
+        title_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #1E293B;")
+        layout.addWidget(title_lbl)
+
+        desc_lbl = QLabel("Pengaturan autentikasi hardware/software USB challenge-response.")
+        desc_lbl.setWordWrap(True)
+        desc_lbl.setStyleSheet("font-size: 12px; color: #64748B;")
+        layout.addWidget(desc_lbl)
+
+        self.usb_token_status_label = QLabel("Status Token USB: Belum Terdaftar")
+        self.usb_token_status_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #B45309;")
+        layout.addWidget(self.usb_token_status_label)
+
+        btn_layout = QHBoxLayout()
+        self.enroll_usb_btn = QPushButton("Enroll USB")
+        self.enroll_usb_btn.setStyleSheet(
+            "background-color: #059669; color: white; padding: 6px; border-radius: 4px; font-weight: bold; font-size: 11px;"
+        )
+        self.enroll_usb_btn.clicked.connect(self.enroll_usb_requested.emit)
+        btn_layout.addWidget(self.enroll_usb_btn)
+
+        self.revoke_usb_btn = QPushButton("Revoke USB")
+        self.revoke_usb_btn.setStyleSheet(
+            "background-color: #DC2626; color: white; padding: 6px; border-radius: 4px; font-weight: bold; font-size: 11px;"
+        )
+        self.revoke_usb_btn.clicked.connect(self.revoke_usb_requested.emit)
+        self.revoke_usb_btn.setEnabled(False)
+        btn_layout.addWidget(self.revoke_usb_btn)
+
+        layout.addLayout(btn_layout)
+        return card
+
+    def set_usb_token_status(self, is_enrolled: bool, info: str = ""):
+        """Update USB token registration status."""
+        if is_enrolled:
+            self.usb_token_status_label.setText(f"Status Token: Terdaftar ({info or 'Aktif'})")
+            self.usb_token_status_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #059669;")
+            self.enroll_usb_btn.setText("Ganti Token (Re-enroll)")
+            self.revoke_usb_btn.setEnabled(True)
+        else:
+            self.usb_token_status_label.setText("Status Token: Belum Terdaftar")
+            self.usb_token_status_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #B45309;")
+            self.enroll_usb_btn.setText("Enroll USB")
+            self.revoke_usb_btn.setEnabled(False)
 
     def _create_feature_card(self, title: str, description: str, status: str) -> QFrame:
         card = QFrame()

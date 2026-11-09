@@ -48,10 +48,10 @@ class LoginPage(QWidget):
         card_layout.addWidget(subtitle)
 
         # Demo Banner
-        demo_banner = QLabel("STATUS: M2 AUTH AKTIF (SQLite + Argon2id)\nUSB Token & Face Recognition masih tahap simulasi.")
+        demo_banner = QLabel("STATUS: M3 AUTH AKTIF (Argon2id + USB Challenge-Response)\nFace Recognition masih tahap simulasi.")
         demo_banner.setAlignment(Qt.AlignCenter)
         demo_banner.setStyleSheet(
-            "background-color: #FEF3C7; color: #92400E; border: 1px solid #F59E0B; "
+            "background-color: #ECFDF5; color: #065F46; border: 1px solid #10B981; "
             "padding: 8px; border-radius: 4px; font-weight: 600; font-size: 11px;"
         )
         card_layout.addWidget(demo_banner)
@@ -68,17 +68,17 @@ class LoginPage(QWidget):
         self.password_input.setEchoMode(QLineEdit.Password)
         card_layout.addWidget(self.password_input)
 
-        # Simulated Factors Status Box
-        factors_box = QGroupBox("Status Faktor Autentikasi Tambahan (Simulasi DEMO)")
+        # Factors Status Box
+        factors_box = QGroupBox("Status Faktor Autentikasi Tambahan")
         factors_layout = QVBoxLayout(factors_box)
         factors_layout.setSpacing(6)
 
-        self.usb_status_label = QLabel("USB Token: Belum Terpasang (SIMULASI / DEMO)")
-        self.usb_status_label.setStyleSheet("color: #B45309; font-size: 11px;")
+        self.usb_status_label = QLabel("USB Token: Tidak Terdeteksi")
+        self.usb_status_label.setStyleSheet("color: #B45309; font-size: 11px; font-weight: 500;")
         factors_layout.addWidget(self.usb_status_label)
 
         self.face_status_label = QLabel("Face Recognition: Belum Diverifikasi (SIMULASI / DEMO)")
-        self.face_status_label.setStyleSheet("color: #B45309; font-size: 11px;")
+        self.face_status_label.setStyleSheet("color: #6B7280; font-size: 11px;")
         factors_layout.addWidget(self.face_status_label)
 
         card_layout.addWidget(factors_box)
@@ -124,6 +124,15 @@ class LoginPage(QWidget):
         """Display error message to user."""
         self.error_label.setText(message)
         self.error_label.setVisible(True)
+
+    def set_usb_status(self, is_detected: bool, info: str = ""):
+        """Update USB detection status on the login UI."""
+        if is_detected:
+            self.usb_status_label.setText(f"USB Token: Terdeteksi ({info or 'Siap diverifikasi'})")
+            self.usb_status_label.setStyleSheet("color: #059669; font-size: 11px; font-weight: bold;")
+        else:
+            self.usb_status_label.setText("USB Token: Tidak Terdeteksi (Pasang USB token terdaftar jika diperlukan)")
+            self.usb_status_label.setStyleSheet("color: #B45309; font-size: 11px; font-weight: 500;")
 
     def reset_fields(self):
         """Reset inputs and clear errors upon logout."""

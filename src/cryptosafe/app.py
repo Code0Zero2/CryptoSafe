@@ -9,9 +9,15 @@ from cryptosafe.gui.main_window import MainWindow
 from cryptosafe.database.connection import get_connection
 from cryptosafe.database.schema import init_db
 from cryptosafe.database.user_repository import UserRepository
+from cryptosafe.database.usb_repository import UsbRepository
 from cryptosafe.auth.auth_service import AuthService
+from cryptosafe.auth.usb_token_service import UsbTokenService
 
-def create_app(args: list[str] | None = None, auth_service: AuthService | None = None) -> tuple[QApplication, MainWindow]:
+def create_app(
+    args: list[str] | None = None,
+    auth_service: AuthService | None = None,
+    usb_service: UsbTokenService | None = None,
+) -> tuple[QApplication, MainWindow]:
     """Create or reuse QApplication and instantiate MainWindow."""
     setup_logging()
     
@@ -22,13 +28,15 @@ def create_app(args: list[str] | None = None, auth_service: AuthService | None =
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(__version__)
 
-    if auth_service is None:
+    if auth_service is None or usb_service is None:
         conn = get_connection()
         init_db(conn)
         user_repo = UserRepository(conn)
-        auth_service = AuthService(user_repo)
+        usb_repo = UsbRepository(conn)
+        usb_service = UsbTokenService(usb_repo)
+        auth_service = AuthService(user_repo, usb_service=usb_service)
 
-    window = MainWindow(auth_service=auth_service)
+    window = MainWindow(auth_service=auth_service, usb_service=usb_service)
     return app, window
 
 def main(args: list[str] | None = None) -> int:
