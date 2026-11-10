@@ -1,0 +1,133 @@
+import os
+import sys
+import unittest
+from pathlib import Path
+
+os.environ["QT_QPA_PLATFORM"] = "offscreen"
+
+src_dir = Path(__file__).resolve().parent.parent.parent / "src"
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
+
+from PySide6.QtWidgets import QApplication
+from cryptosafe.gui.main_window import MainWindow
+from cryptosafe.gui.dashboard_page import DashboardPage
+from cryptosafe.gui.text_page import TextPage
+from cryptosafe.database.connection import get_connection
+from cryptosafe.database.schema import init_db
+from cryptosafe.database.user_repository import UserRepository
+from cryptosafe.auth.password_service import PasswordService
+from cryptosafe.auth.auth_service import AuthService
+
+
+class TestTextCryptoGuiIntegration(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance()
+        if cls.app is None:
+            cls.app = QApplication([])
+
+    def setUp(self):
+        self.conn = get_connection(":memory:")
+        init_db(self.conn)
+        self.user_repo = UserRepository(self.conn)
+        self.pwd_service = PasswordService(time_cost=1, memory_cost=8192, parallelism=1)
+        self.auth_service = AuthService(self.user_repo, self.pwd_service)
+        self.auth_service.register_user("alice", "Secret123!", "Secret123!")
+
+        self.window = MainWindow(auth_service=self.auth_service)
+        self.window.show()
+
+        # Switch to dashboard page
+        self.window.dashboard_page.set_user("alice")
+        self.window.stack.setCurrentIndex(1)
+
+    def tearDown(self):
+        self.window.close()
+        self.conn.close()
+
+    def test_navigation_to_text_crypto_page_and_back(self):
+        # Starts on Dashboard
+        self.assertIsInstance(self.window.stack.currentWidget(), DashboardPage)
+
+        # Trigger navigation to Text Crypto page
+        self.window.dashboard_page.btn_open_text_crypto.click()
+        self.assertIsInstance(self.window.stack.currentWidget(), TextPage)
+
+        # Trigger back to Dashboard
+        self.window.text_page.back_button.click()
+        self.assertIsInstance(self.window.stack.currentWidget(), DashboardPage)
+
+    def test_direct_hex_key_workflow(self):
+        # Navigate to TextPage
+        self.window.dashboard_page.btn_open_text_crypto.click()
+        text_page = self.window.text_page
+
+        # Fill encryption inputs
+        original_text = "Dokumen Rahasia Operasi Alpha 2026!"
+        vig_key = "KUNCI"
+        text_page.enc_plaintext_input.setPlainText(original_text)
+        text_page.enc_vig_key_input.setText(vig_key)
+
+        # Generate random AES key (64 hex characters)
+        text_page._generate_random_key_clicked()
+        aes_key = text_page.enc_aes_key_input.text()
+        self.assertEqual(len(aes_key), 64)
+
+        # Perform encryption
+        text_page.encrypt_button.click()
+        ciphertext_json = text_page.enc_result_output.toPlainText()
+        self.assertIn("CRYPTOSAFE_TEXT", ciphertext_json)
+        self.assertIn("VIGENERE+AES-256-GCM", ciphertext_json)
+        self.assertIn("DIRECT-AES-256", ciphertext_json)
+
+        # Switch to Decryption tab
+        text_page.tabs.setCurrentIndex(1)
+        text_page.dec_envelope_input.setPlainText(ciphertext_json)
+        text_page.dec_vig_key_input.setText(vig_key)
+        text_page.dec_aes_key_input.setText(aes_key)
+
+        # Perform decryption
+        text_page.decrypt_button.click()
+        recovered_text = text_page.dec_result_output.toPlainText()
+        self.assertEqual(recovered_text, original_text)
+
+        # Test failure on wrong AES key
+        text_page.dec_aes_key_input.setText("WrongPassphrase123")
+        text_page.decrypt_button.click()
+        self.assertTrue(text_page.message_label.isVisible())
+        self.assertEqual(text_page.dec_result_output.toPlainText(), "")
+
+    def test_passphrase_workflow(self):
+        # Navigate to TextPage
+        self.window.dashboard_page.btn_open_text_crypto.click()
+        text_page = self.window.text_page
+
+        original_text = "Pesan teks dengan passphrase biasa"
+        vig_key = "ALPHA"
+        passphrase = "PasswordUserKuat2026!"
+
+        text_page.enc_plaintext_input.setPlainText(original_text)
+        text_page.enc_vig_key_input.setText(vig_key)
+        text_page.enc_aes_key_input.setText(passphrase)
+
+        # Perform encryption
+        text_page.encrypt_button.click()
+        ciphertext_json = text_page.enc_result_output.toPlainText()
+        self.assertIn("PBKDF2-HMAC-SHA256", ciphertext_json)
+        self.assertIn("iterations", ciphertext_json)
+
+        # Switch to Decryption tab
+        text_page.tabs.setCurrentIndex(1)
+        text_page.dec_envelope_input.setPlainText(ciphertext_json)
+        text_page.dec_vig_key_input.setText(vig_key)
+        text_page.dec_aes_key_input.setText(passphrase)
+
+        # Perform decryption
+        text_page.decrypt_button.click()
+        recovered_text = text_page.dec_result_output.toPlainText()
+        self.assertEqual(recovered_text, original_text)
+
+
+if __name__ == "__main__":
+    unittest.main()
