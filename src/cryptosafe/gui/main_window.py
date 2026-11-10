@@ -13,11 +13,13 @@ from cryptosafe.gui.file_page import FilePage
 from cryptosafe.gui.contract_page import ContractPage
 from cryptosafe.gui.usb_dialog import UsbEnrollDialog
 from cryptosafe.gui.face_capture_dialog import FaceCaptureDialog
+from cryptosafe.gui.stego_page import StegoPage
 from cryptosafe.auth.auth_service import AuthService
 from cryptosafe.auth.usb_token_service import UsbTokenService
 from cryptosafe.auth.face_service import FaceService
 from cryptosafe.crypto.text_crypto_service import TextCryptoService
 from cryptosafe.crypto.file_crypto_service import FileCryptoService
+from cryptosafe.crypto.steganography_service import SteganographyService
 from cryptosafe.database.connection import get_connection
 from cryptosafe.database.schema import init_db
 from cryptosafe.database.user_repository import UserRepository
@@ -45,6 +47,7 @@ class MainWindow(QMainWindow):
         contract_repository: ContractRepository | None = None,
         message_service: EncryptedMessageService | None = None,
         contract_file_service: ContractFileService | None = None,
+        stego_service: SteganographyService | None = None,
         conn: sqlite3.Connection | None = None,
         parent=None,
     ):
@@ -87,6 +90,7 @@ class MainWindow(QMainWindow):
         self._face_service = face_service
         self._text_crypto_service = text_crypto_service or TextCryptoService()
         self._file_crypto_service = file_crypto_service or FileCryptoService()
+        self._stego_service = stego_service or SteganographyService(text_crypto_service=self._text_crypto_service)
 
         if contract_repository is None:
             contract_repository = ContractRepository(conn)
@@ -137,6 +141,7 @@ class MainWindow(QMainWindow):
             file_service=self._contract_file_service,
             parent=self,
         )
+        self.stego_page = StegoPage(stego_service=self._stego_service, parent=self)
 
         self.stack.addWidget(self.login_page)       # Index 0
         self.stack.addWidget(self.dashboard_page)   # Index 1
@@ -144,6 +149,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.text_page)        # Index 3
         self.stack.addWidget(self.file_page)        # Index 4
         self.stack.addWidget(self.contract_page)    # Index 5
+        self.stack.addWidget(self.stego_page)       # Index 6
 
         # Connect navigation signals
         self.login_page.login_requested.connect(self._on_login_requested)
@@ -160,10 +166,12 @@ class MainWindow(QMainWindow):
         self.dashboard_page.open_text_crypto_requested.connect(self._on_open_text_crypto)
         self.dashboard_page.open_file_crypto_requested.connect(self._on_open_file_crypto)
         self.dashboard_page.open_contract_requested.connect(self._on_open_contract)
+        self.dashboard_page.open_steganography_requested.connect(self._on_open_steganography)
 
         self.text_page.back_to_dashboard_requested.connect(self._on_back_from_text_crypto)
         self.file_page.back_to_dashboard_requested.connect(self._on_back_from_file_crypto)
         self.contract_page.back_to_dashboard_requested.connect(self._on_back_from_contract)
+        self.stego_page.back_to_dashboard_requested.connect(self._on_back_from_stego)
 
     def _on_open_text_crypto(self):
         self.text_page.clear_fields()
@@ -199,6 +207,14 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(5)
 
     def _on_back_from_contract(self):
+        self.stack.setCurrentIndex(1)
+
+    def _on_open_steganography(self):
+        self.stego_page.clear_fields()
+        self.stack.setCurrentIndex(6)
+
+    def _on_back_from_stego(self):
+        self.stego_page.clear_fields()
         self.stack.setCurrentIndex(1)
 
     def _on_login_requested(self, username: str, password: str):

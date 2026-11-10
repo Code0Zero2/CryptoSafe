@@ -23,6 +23,7 @@ class DashboardPage(QWidget):
     open_text_crypto_requested = Signal()
     open_file_crypto_requested = Signal()
     open_contract_requested = Signal()
+    open_steganography_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -114,7 +115,7 @@ class DashboardPage(QWidget):
             (
                 "Steganografi Gambar",
                 "Penyisipan payload terenkripsi AES-GCM ke citra PNG via LSB.",
-                "Milestone M9 — Direncanakan"
+                "Milestone M9 — Aktif"
             ),
             (
                 "Verifikasi Integritas Aset",
@@ -259,6 +260,17 @@ class DashboardPage(QWidget):
             )
             self.btn_open_file_crypto.clicked.connect(self.open_file_crypto_requested.emit)
             layout.addWidget(self.btn_open_file_crypto)
+
+            status_lbl = QLabel(f"Status: {status}")
+            status_lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #059669;")
+            layout.addWidget(status_lbl)
+        elif title == "Steganografi Gambar":
+            self.btn_open_steganography = QPushButton("Buka Steganografi Gambar →")
+            self.btn_open_steganography.setStyleSheet(
+                "background-color: #2563EB; color: white; padding: 6px; border-radius: 4px; font-weight: bold; font-size: 11px;"
+            )
+            self.btn_open_steganography.clicked.connect(self.open_steganography_requested.emit)
+            layout.addWidget(self.btn_open_steganography)
 
             status_lbl = QLabel(f"Status: {status}")
             status_lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #059669;")
