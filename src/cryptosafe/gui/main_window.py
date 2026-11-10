@@ -1,4 +1,4 @@
-"""Main application window container (M4)."""
+"""Main application window container (M5)."""
 
 import logging
 from pathlib import Path
@@ -7,9 +7,11 @@ from cryptosafe.config import DATA_DIR
 from cryptosafe.gui.login_page import LoginPage
 from cryptosafe.gui.register_page import RegisterPage
 from cryptosafe.gui.dashboard_page import DashboardPage
+from cryptosafe.gui.text_page import TextPage
 from cryptosafe.auth.auth_service import AuthService
 from cryptosafe.auth.usb_token_service import UsbTokenService
 from cryptosafe.auth.face_service import FaceService
+from cryptosafe.crypto.text_crypto_service import TextCryptoService
 from cryptosafe.database.connection import get_connection
 from cryptosafe.database.schema import init_db
 from cryptosafe.database.user_repository import UserRepository
@@ -20,17 +22,18 @@ from cryptosafe.common.errors import AuthenticationError, ValidationError
 logger = logging.getLogger("cryptosafe.gui")
 
 class MainWindow(QMainWindow):
-    """Main Application Window hosting Login, Register, and Dashboard pages with USB & Face MFA."""
+    """Main Application Window hosting Login, Register, Dashboard, and Feature pages."""
 
     def __init__(
         self,
         auth_service: AuthService | None = None,
         usb_service: UsbTokenService | None = None,
         face_service: FaceService | None = None,
+        text_crypto_service: TextCryptoService | None = None,
         parent=None,
     ):
         super().__init__(parent)
-        self.setWindowTitle("CRYPTOSAFE — Multi-Factor Cryptography Demonstrator [M4]")
+        self.setWindowTitle("CRYPTOSAFE — Multi-Factor Cryptography Demonstrator [M6]")
         self.resize(960, 680)
         self.setMinimumSize(800, 560)
 
@@ -56,6 +59,7 @@ class MainWindow(QMainWindow):
         self._auth_service = auth_service
         self._usb_service = usb_service
         self._face_service = face_service
+        self._text_crypto_service = text_crypto_service or TextCryptoService()
         self._current_user = None
 
         self._setup_pages()
@@ -75,10 +79,12 @@ class MainWindow(QMainWindow):
         self.login_page = LoginPage(self)
         self.dashboard_page = DashboardPage(self)
         self.register_page = RegisterPage(self)
+        self.text_page = TextPage(text_crypto_service=self._text_crypto_service, parent=self)
 
         self.stack.addWidget(self.login_page)       # Index 0
         self.stack.addWidget(self.dashboard_page)   # Index 1
         self.stack.addWidget(self.register_page)    # Index 2
+        self.stack.addWidget(self.text_page)        # Index 3
 
         # Connect navigation signals
         self.login_page.login_requested.connect(self._on_login_requested)
@@ -92,6 +98,17 @@ class MainWindow(QMainWindow):
         self.dashboard_page.revoke_usb_requested.connect(self._on_revoke_usb_requested)
         self.dashboard_page.enroll_face_requested.connect(self._on_enroll_face_requested)
         self.dashboard_page.revoke_face_requested.connect(self._on_revoke_face_requested)
+        self.dashboard_page.open_text_crypto_requested.connect(self._on_open_text_crypto)
+
+        self.text_page.back_to_dashboard_requested.connect(self._on_back_from_text_crypto)
+
+    def _on_open_text_crypto(self):
+        self.text_page.clear_fields()
+        self.stack.setCurrentIndex(3)
+
+    def _on_back_from_text_crypto(self):
+        self.text_page.clear_fields()
+        self.stack.setCurrentIndex(1)
 
     def _on_login_requested(self, username: str, password: str):
         try:
@@ -186,6 +203,7 @@ class MainWindow(QMainWindow):
     def _on_logout_requested(self):
         logged_user = self._current_user.username if self._current_user else "anonymous"
         logger.info("Session terminated for user: %s", logged_user)
+        self._auth_service.logout()
         self._current_user = None
         self.login_page.reset_fields()
         self._refresh_usb_detection()

@@ -20,6 +20,7 @@ class DashboardPage(QWidget):
     revoke_usb_requested = Signal()
     enroll_face_requested = Signal()
     revoke_face_requested = Signal()
+    open_text_crypto_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -84,7 +85,7 @@ class DashboardPage(QWidget):
             (
                 "Super-Enkripsi Teks",
                 "Kombinasi Vigenère cipher edukatif dan enkripsi modern AES-256-GCM.",
-                "Milestone M6 — Direncanakan"
+                "Milestone M6 — Aktif"
             ),
             (
                 "Enkripsi Berkas",
@@ -130,7 +131,7 @@ class DashboardPage(QWidget):
         layout = QVBoxLayout(card)
         layout.setSpacing(6)
 
-        title_lbl = QLabel("Manajemen Kredensial MFA (M3 & M4)")
+        title_lbl = QLabel("Manajemen Kredensial MFA (M5)")
         title_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #1E293B;")
         layout.addWidget(title_lbl)
 
@@ -226,9 +227,21 @@ class DashboardPage(QWidget):
 
         layout.addStretch()
 
-        status_lbl = QLabel(f"Status: {status}")
-        status_lbl.setStyleSheet("font-size: 11px; font-weight: 600; color: #475569;")
-        layout.addWidget(status_lbl)
+        if title == "Super-Enkripsi Teks":
+            self.btn_open_text_crypto = QPushButton("Buka Super-Enkripsi Teks →")
+            self.btn_open_text_crypto.setStyleSheet(
+                "background-color: #2563EB; color: white; padding: 6px; border-radius: 4px; font-weight: bold; font-size: 11px;"
+            )
+            self.btn_open_text_crypto.clicked.connect(self.open_text_crypto_requested.emit)
+            layout.addWidget(self.btn_open_text_crypto)
+
+            status_lbl = QLabel(f"Status: {status}")
+            status_lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #059669;")
+            layout.addWidget(status_lbl)
+        else:
+            status_lbl = QLabel(f"Status: {status}")
+            status_lbl.setStyleSheet("font-size: 11px; font-weight: 600; color: #475569;")
+            layout.addWidget(status_lbl)
 
         return card
 

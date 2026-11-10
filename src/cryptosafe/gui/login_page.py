@@ -48,7 +48,7 @@ class LoginPage(QWidget):
         card_layout.addWidget(subtitle)
 
         # Demo Banner
-        demo_banner = QLabel("STATUS: M4 AUTH AKTIF (Argon2id + USB Challenge-Response + Face Recognition)\nSeluruh faktor multi-autentikasi aktif.")
+        demo_banner = QLabel("STATUS: M5 AUTH TERINTEGRASI (Argon2id + USB Challenge-Response + Face Recognition)\nSeluruh faktor multi-autentikasi aktif.")
         demo_banner.setAlignment(Qt.AlignCenter)
         demo_banner.setStyleSheet(
             "background-color: #ECFDF5; color: #065F46; border: 1px solid #10B981; "
