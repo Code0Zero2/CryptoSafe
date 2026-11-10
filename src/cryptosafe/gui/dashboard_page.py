@@ -21,6 +21,7 @@ class DashboardPage(QWidget):
     enroll_face_requested = Signal()
     revoke_face_requested = Signal()
     open_text_crypto_requested = Signal()
+    open_file_crypto_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -90,7 +91,7 @@ class DashboardPage(QWidget):
             (
                 "Enkripsi Berkas",
                 "Enkripsi berkas biner/teks dengan ChaCha20-Poly1305 dan envelope ber-versi.",
-                "Milestone M7 — Direncanakan"
+                "Milestone M7 — Aktif"
             ),
             (
                 "Penyimpanan Database Terenkripsi",
@@ -234,6 +235,17 @@ class DashboardPage(QWidget):
             )
             self.btn_open_text_crypto.clicked.connect(self.open_text_crypto_requested.emit)
             layout.addWidget(self.btn_open_text_crypto)
+
+            status_lbl = QLabel(f"Status: {status}")
+            status_lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #059669;")
+            layout.addWidget(status_lbl)
+        elif title == "Enkripsi Berkas":
+            self.btn_open_file_crypto = QPushButton("Buka Enkripsi Berkas →")
+            self.btn_open_file_crypto.setStyleSheet(
+                "background-color: #2563EB; color: white; padding: 6px; border-radius: 4px; font-weight: bold; font-size: 11px;"
+            )
+            self.btn_open_file_crypto.clicked.connect(self.open_file_crypto_requested.emit)
+            layout.addWidget(self.btn_open_file_crypto)
 
             status_lbl = QLabel(f"Status: {status}")
             status_lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #059669;")
