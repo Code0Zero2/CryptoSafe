@@ -22,6 +22,7 @@ class DashboardPage(QWidget):
     revoke_face_requested = Signal()
     open_text_crypto_requested = Signal()
     open_file_crypto_requested = Signal()
+    open_contract_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -47,6 +48,18 @@ class DashboardPage(QWidget):
         header_layout.addLayout(title_box)
 
         header_layout.addStretch()
+
+        # Contract Management button
+        self.btn_open_contract = QPushButton("Manajemen Kontrak")
+        self.btn_open_contract.setStyleSheet(
+            "background-color: #0D9488; color: white; padding: 6px 14px; "
+            "font-weight: bold; border-radius: 4px; font-size: 12px;"
+        )
+        self.btn_open_contract.clicked.connect(self.open_contract_requested.emit)
+        self.contract_button = self.btn_open_contract
+        self.contract_management_button = self.btn_open_contract
+        self.btn_contract = self.btn_open_contract
+        header_layout.addWidget(self.btn_open_contract)
 
         # Demo Mode Badge
         demo_badge = QLabel("PROTOTYPE DEMO")
@@ -95,8 +108,8 @@ class DashboardPage(QWidget):
             ),
             (
                 "Penyimpanan Database Terenkripsi",
-                "Penyimpanan catatan sensitif ke SQLite terenkripsi AES-256-GCM.",
-                "Milestone M8 — Direncanakan"
+                "Penyimpanan data kontrak dan catatan sensitif terenkripsi AES-256-GCM ke SQLite.",
+                "Aktif"
             ),
             (
                 "Steganografi Gambar",
@@ -246,6 +259,17 @@ class DashboardPage(QWidget):
             )
             self.btn_open_file_crypto.clicked.connect(self.open_file_crypto_requested.emit)
             layout.addWidget(self.btn_open_file_crypto)
+
+            status_lbl = QLabel(f"Status: {status}")
+            status_lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #059669;")
+            layout.addWidget(status_lbl)
+        elif title in ("Penyimpanan Database Terenkripsi", "Manajemen Kontrak"):
+            self.btn_open_contract_card = QPushButton("Buka Manajemen Kontrak →")
+            self.btn_open_contract_card.setStyleSheet(
+                "background-color: #0D9488; color: white; padding: 6px; border-radius: 4px; font-weight: bold; font-size: 11px;"
+            )
+            self.btn_open_contract_card.clicked.connect(self.open_contract_requested.emit)
+            layout.addWidget(self.btn_open_contract_card)
 
             status_lbl = QLabel(f"Status: {status}")
             status_lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #059669;")

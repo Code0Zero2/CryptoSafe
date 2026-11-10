@@ -3,7 +3,7 @@
 import sqlite3
 from datetime import datetime, timezone
 
-CURRENT_SCHEMA_VERSION = 3
+CURRENT_SCHEMA_VERSION = 4
 
 MIGRATION_V1 = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -52,6 +52,78 @@ CREATE TABLE IF NOT EXISTS face_profiles (
 CREATE INDEX IF NOT EXISTS idx_face_user_id ON face_profiles(user_id);
 """
 
+MIGRATION_V4 = """
+CREATE TABLE IF NOT EXISTS contracts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contract_number TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    parties TEXT NOT NULL,
+    start_date TEXT,
+    end_date TEXT,
+    status TEXT NOT NULL DEFAULT 'Draft'
+        CHECK (status IN (
+            'Draft',
+            'Review',
+            'Approved',
+            'Signed',
+            'Archived'
+        )),
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_contracts_created_by
+ON contracts(created_by);
+
+CREATE INDEX IF NOT EXISTS idx_contracts_status
+ON contracts(status);
+
+
+CREATE TABLE IF NOT EXISTS encrypted_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contract_id INTEGER NOT NULL REFERENCES contracts(id)
+        ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    content_type TEXT NOT NULL
+        CHECK (content_type IN ('note', 'clause', 'draft')),
+    label TEXT NOT NULL,
+    ciphertext TEXT NOT NULL,
+    algorithm TEXT NOT NULL DEFAULT 'AES-256-GCM+Vigenere',
+    envelope_version INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_contract_id
+ON encrypted_messages(contract_id);
+
+CREATE INDEX IF NOT EXISTS idx_messages_user_id
+ON encrypted_messages(user_id);
+
+
+CREATE TABLE IF NOT EXISTS contract_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contract_id INTEGER NOT NULL REFERENCES contracts(id)
+        ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    original_filename TEXT NOT NULL,
+    encrypted_path TEXT NOT NULL UNIQUE,
+    mime_type TEXT,
+    size_bytes INTEGER NOT NULL,
+    algorithm TEXT NOT NULL DEFAULT 'ChaCha20-Poly1305',
+    envelope_version INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_files_contract_id
+ON contract_files(contract_id);
+
+CREATE INDEX IF NOT EXISTS idx_files_user_id
+ON contract_files(user_id);
+"""
+
+
 def init_db(conn: sqlite3.Connection) -> None:
     """Initialize or migrate the database schema."""
     with conn:
@@ -81,3 +153,10 @@ def init_db(conn: sqlite3.Connection) -> None:
                 (now_iso,)
             )
 
+        conn.executescript(MIGRATION_V4)
+        cur.execute("SELECT version FROM schema_version WHERE version = 4")
+        if not cur.fetchone():
+            cur.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (4, ?)",
+                (now_iso,)
+            )
