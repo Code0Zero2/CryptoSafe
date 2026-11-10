@@ -3,7 +3,7 @@
 import logging
 import sqlite3
 from pathlib import Path
-from PySide6.QtWidgets import QMainWindow, QStackedWidget, QMessageBox
+from PySide6.QtWidgets import QMainWindow, QStackedWidget, QMessageBox, QDialog, QInputDialog, QLineEdit
 from cryptosafe.config import DATA_DIR
 from cryptosafe.gui.login_page import LoginPage
 from cryptosafe.gui.register_page import RegisterPage
@@ -11,6 +11,7 @@ from cryptosafe.gui.dashboard_page import DashboardPage
 from cryptosafe.gui.text_page import TextPage
 from cryptosafe.gui.file_page import FilePage
 from cryptosafe.gui.contract_page import ContractPage
+from cryptosafe.gui.usb_dialog import UsbEnrollDialog
 from cryptosafe.auth.auth_service import AuthService
 from cryptosafe.auth.usb_token_service import UsbTokenService
 from cryptosafe.auth.face_service import FaceService
@@ -24,6 +25,8 @@ from cryptosafe.database.face_repository import FaceRepository
 from cryptosafe.database.contract_repository import ContractRepository
 from cryptosafe.database.encrypted_message_repository import EncryptedMessageRepository
 from cryptosafe.database.encrypted_message_service import EncryptedMessageService
+from cryptosafe.database.contract_file_repository import ContractFileRepository
+from cryptosafe.database.contract_file_service import ContractFileService
 from cryptosafe.common.errors import AuthenticationError, ValidationError
 
 logger = logging.getLogger("cryptosafe.gui")
@@ -40,6 +43,7 @@ class MainWindow(QMainWindow):
         file_crypto_service: FileCryptoService | None = None,
         contract_repository: ContractRepository | None = None,
         message_service: EncryptedMessageService | None = None,
+        contract_file_service: ContractFileService | None = None,
         conn: sqlite3.Connection | None = None,
         parent=None,
     ):
@@ -92,6 +96,14 @@ class MainWindow(QMainWindow):
             message_service = EncryptedMessageService(message_repo, crypto_service=self._text_crypto_service)
         self._message_service = message_service
 
+        if contract_file_service is None:
+            contract_file_repo = ContractFileRepository(conn)
+            contract_file_service = ContractFileService(
+                repository=contract_file_repo,
+                crypto_service=self._file_crypto_service,
+            )
+        self._contract_file_service = contract_file_service
+
         self._current_user = None
 
         self._setup_pages()
@@ -100,7 +112,12 @@ class MainWindow(QMainWindow):
     def _refresh_usb_detection(self):
         detected = self._usb_service.detect_token_file()
         if detected:
-            self.login_page.set_usb_status(True, detected.name)
+            if detected.parent.name == ".cryptosafe":
+                parent_name = detected.parent.parent.name or str(detected.parent.parent)
+                display_label = f"{parent_name}/.cryptosafe"
+            else:
+                display_label = detected.name
+            self.login_page.set_usb_status(True, display_label)
         else:
             self.login_page.set_usb_status(False)
 
@@ -116,6 +133,7 @@ class MainWindow(QMainWindow):
         self.contract_page = ContractPage(
             self._contract_repository,
             self._message_service,
+            file_service=self._contract_file_service,
             parent=self,
         )
 
@@ -202,22 +220,69 @@ class MainWindow(QMainWindow):
     def _on_enroll_usb_requested(self):
         if not self._current_user:
             return
-        target_dir = DATA_DIR / "tokens" / self._current_user.username
-        target_dir.mkdir(parents=True, exist_ok=True)
+
+        dialog = UsbEnrollDialog(self._usb_service, self._current_user.username, parent=self)
+        if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.selected_path:
+            return
+
+        # Authenticate password
+        if not self._auth_service._password_service.verify_password(
+            dialog.confirmed_password, self._current_user.password_hash
+        ):
+            QMessageBox.warning(
+                self,
+                "Autentikasi Gagal",
+                "Kata sandi yang Anda masukkan salah. Pendaftaran USB dibatalkan."
+            )
+            return
+
         try:
-            cred, token_path = self._usb_service.enroll_token(self._current_user.id, target_dir)
+            cred, token_path = self._usb_service.enroll_token(self._current_user.id, dialog.selected_path)
             self.dashboard_page.set_usb_token_status(True, f"Token ID: {cred.token_id[:8]}...")
             self._refresh_usb_detection()
-            logger.info("Token enrolled at %s", token_path)
-        except ValidationError as err:
+            QMessageBox.information(
+                self,
+                "Registrasi USB Dongle Berhasil",
+                f"Token autentikasi berhasil dibuat dan disimpan di:\n{token_path}\n\n"
+                "Flashdisk ini kini wajib terpasang saat melakukan login."
+            )
+            logger.info("USB token enrolled for user %s at %s", self._current_user.username, token_path.parent)
+        except (ValidationError, AuthenticationError, OSError) as err:
             logger.error("Failed to enroll USB token: %s", err)
+            QMessageBox.critical(self, "Gagal Mendaftarkan USB", str(err))
 
     def _on_revoke_usb_requested(self):
         if not self._current_user:
             return
+
+        password, accepted = QInputDialog.getText(
+            self,
+            "Konfirmasi Pencabutan USB Dongle",
+            "Masukkan kata sandi akun untuk mencabut USB Dongle:\n"
+            "(Akun akan kembali login hanya dengan password)",
+            QLineEdit.EchoMode.Password,
+        )
+        if not accepted or not password:
+            return
+
+        if not self._auth_service._password_service.verify_password(
+            password, self._current_user.password_hash
+        ):
+            QMessageBox.warning(
+                self,
+                "Autentikasi Gagal",
+                "Kata sandi salah. Pencabutan USB dibatalkan."
+            )
+            return
+
         self._usb_service.revoke_token(self._current_user.id)
         self.dashboard_page.set_usb_token_status(False)
         self._refresh_usb_detection()
+        QMessageBox.information(
+            self,
+            "USB Dicabut",
+            "USB Dongle berhasil dicabut. Akun kini dapat login tanpa USB."
+        )
 
     def _on_enroll_face_requested(self):
         if not self._current_user:

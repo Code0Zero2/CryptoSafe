@@ -1,11 +1,13 @@
 """Key management and derivation policies for AES-256."""
 
 import secrets
+import string
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptosafe.common.errors import ValidationError
 
 DEFAULT_PBKDF2_ITERATIONS = 600_000
+DEFAULT_VIGENERE_KEY_LENGTH = 16
 SALT_LENGTH_BYTES = 16
 KEY_LENGTH_BYTES = 32  # 256 bits
 
@@ -16,6 +18,30 @@ KDF_DIRECT = "DIRECT-AES-256"
 def generate_random_aes_key() -> str:
     """Generate a cryptographically secure 256-bit AES key as a 64-character hex string."""
     return secrets.token_hex(KEY_LENGTH_BYTES)
+
+
+def generate_vigenere_key(length: int = DEFAULT_VIGENERE_KEY_LENGTH) -> str:
+    """Generate a cryptographically secure random uppercase alphabetic key for Vigenère cipher."""
+    if not isinstance(length, int) or length <= 0:
+        raise ValidationError("Panjang kunci Vigenère harus berupa bilangan bulat positif.")
+    return "".join(secrets.choice(string.ascii_uppercase) for _ in range(length))
+
+
+def generate_super_encryption_keys(
+    vigenere_length: int = DEFAULT_VIGENERE_KEY_LENGTH,
+) -> tuple[str, str]:
+    """Generate a pair of distinct cryptographically secure keys for Super-Encryption.
+
+    Returns:
+        tuple[str, str]: (vigenere_key, aes_key)
+            - vigenere_key: Uppercase A-Z random string meeting Vigenère requirements.
+            - aes_key: 256-bit secure key as a 64-character hexadecimal string.
+    """
+    vig_key = generate_vigenere_key(length=vigenere_length)
+    aes_key = generate_random_aes_key()
+    while vig_key == aes_key:
+        aes_key = generate_random_aes_key()
+    return vig_key, aes_key
 
 
 def generate_salt() -> bytes:

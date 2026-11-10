@@ -14,12 +14,19 @@ src_dir = Path(__file__).resolve().parent.parent.parent / "src"
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
+from unittest.mock import patch, MagicMock
 from cryptosafe.database.connection import get_connection
 from cryptosafe.database.schema import init_db
 from cryptosafe.database.user_repository import UserRepository
 from cryptosafe.database.usb_repository import UsbRepository
 from cryptosafe.auth.password_service import PasswordService
-from cryptosafe.auth.usb_token_service import UsbTokenService, TOKEN_FILENAME
+from cryptosafe.auth.usb_token_service import (
+    UsbTokenService,
+    TOKEN_FILENAME,
+    TOKEN_DIR_NAME,
+    LEGACY_TOKEN_FILENAME,
+    UsbDriveInfo,
+)
 from cryptosafe.auth.auth_service import AuthService
 from cryptosafe.common.errors import AuthenticationError, ValidationError
 
@@ -164,6 +171,89 @@ class TestM3UsbTokenAuthentication(unittest.TestCase):
         _, token_path = self.usb_service.enroll_token(self.user1.id, self.usb_mount1)
         detected = self.usb_service.detect_token_file([self.usb_mount1])
         self.assertEqual(detected, token_path)
+
+    def test_enrollment_preserves_existing_flashdisk_files(self):
+        """Verifies that enrolling a flashdisk does NOT touch, format, or delete existing user files."""
+        # Setup existing files and directories simulating user's USB stick
+        doc_file = self.usb_mount1 / "laporan_keuangan.docx"
+        doc_file.write_text("Dokumen rahasia penting", encoding="utf-8")
+        photo_dir = self.usb_mount1 / "Photos"
+        photo_dir.mkdir(parents=True, exist_ok=True)
+        photo_file = photo_dir / "liburan.png"
+        photo_file.write_bytes(b"\x89PNG\r\n\x1a\nfakeimagebytes")
+
+        cred, token_path = self.usb_service.enroll_token(self.user1.id, self.usb_mount1)
+
+        # Token created under .cryptosafe directory
+        self.assertTrue(token_path.exists())
+        self.assertEqual(token_path.parent.name, TOKEN_DIR_NAME)
+        self.assertEqual(token_path.name, TOKEN_FILENAME)
+
+        # Existing files must remain completely intact
+        self.assertTrue(doc_file.exists())
+        self.assertEqual(doc_file.read_text(encoding="utf-8"), "Dokumen rahasia penting")
+        self.assertTrue(photo_file.exists())
+        self.assertEqual(photo_file.read_bytes(), b"\x89PNG\r\n\x1a\nfakeimagebytes")
+
+    def test_get_available_drives(self):
+        """Verifies get_available_drives enumerates drive info correctly."""
+        drives = self.usb_service.get_available_drives()
+        self.assertIsInstance(drives, list)
+        for drive in drives:
+            self.assertIsInstance(drive, UsbDriveInfo)
+            self.assertIsInstance(drive.root_path, Path)
+            self.assertIsInstance(drive.is_removable, bool)
+
+    def test_disconnected_flashdisk_during_verification(self):
+        """Verifies clear error when flashdisk is unplugged/inaccessible during verification."""
+        _, token_path = self.usb_service.enroll_token(self.user1.id, self.usb_mount1)
+        challenge = self.usb_service.create_challenge(self.user1.id)
+
+        # Simulate flashdisk unplugged causing OSError when opening token file
+        with patch("builtins.open", side_effect=OSError("Device disconnected / I/O error")):
+            with self.assertRaises(AuthenticationError) as ctx:
+                self.usb_service.verify_token(self.user1.id, challenge.challenge_id, token_path)
+            self.assertIn("tidak dapat dibaca", str(ctx.exception).lower())
+
+    def test_enrollment_fails_gracefully_on_readonly_media(self):
+        """Verifies clear ValidationError when media is write-protected or read-only."""
+        with patch("builtins.open", side_effect=PermissionError("Permission denied: read-only filesystem")):
+            with self.assertRaises(ValidationError) as ctx:
+                self.usb_service.enroll_token(self.user1.id, self.usb_mount1)
+            self.assertIn("read-only", str(ctx.exception).lower())
+
+    def test_re_enrollment_replaces_old_credential(self):
+        """Verifies re-enrolling revokes the prior token credential and activates the new one."""
+        old_cred, old_path = self.usb_service.enroll_token(self.user1.id, self.usb_mount1)
+        self.assertTrue(self.usb_service.has_active_token(self.user1.id))
+
+        # Re-enroll on drive_bob
+        new_cred, new_path = self.usb_service.enroll_token(self.user1.id, self.usb_mount2)
+        self.assertNotEqual(old_cred.token_id, new_cred.token_id)
+
+        # Old token fails
+        challenge1 = self.usb_service.create_challenge(self.user1.id)
+        with self.assertRaises(AuthenticationError):
+            self.usb_service.verify_token(self.user1.id, challenge1.challenge_id, old_path)
+
+        # New token succeeds
+        challenge2 = self.usb_service.create_challenge(self.user1.id)
+        self.assertTrue(self.usb_service.verify_token(self.user1.id, challenge2.challenge_id, new_path))
+
+    def test_legacy_cryptosafe_token_key_detection(self):
+        """Verifies backwards compatibility detecting legacy cryptosafe_token.key at drive root."""
+        legacy_file = self.usb_mount1 / LEGACY_TOKEN_FILENAME
+        payload = {
+            "app": "CryptoSafe",
+            "version": 1,
+            "token_id": "legacy-test-id",
+            "token_secret": secrets.token_hex(32),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        legacy_file.write_text(json.dumps(payload), encoding="utf-8")
+
+        detected = self.usb_service.detect_token_file([self.usb_mount1])
+        self.assertEqual(detected, legacy_file)
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 )
 from cryptosafe.common.errors import CryptoSafeError
 from cryptosafe.crypto.text_crypto_service import TextCryptoService
-from cryptosafe.crypto.key_manager import generate_random_aes_key
+from cryptosafe.crypto.key_manager import generate_super_encryption_keys
 
 class TextPage(QWidget):
     """Page hosting Text Super-Encryption and Decryption."""
@@ -81,14 +81,38 @@ class TextPage(QWidget):
         self.enc_plaintext_input.setMaximumHeight(90)
         layout.addWidget(self.enc_plaintext_input)
 
+        # Automatic Key Generator Toolbar
+        gen_toolbar = QHBoxLayout()
+        self.generate_key_button = QPushButton("Generate Key")
+        self.generate_key_button.setStyleSheet(
+            "background-color: #4F46E5; color: white; padding: 6px 14px; font-weight: bold; border-radius: 4px; font-size: 12px;"
+        )
+        self.generate_key_button.clicked.connect(self._generate_keys_clicked)
+        gen_toolbar.addWidget(self.generate_key_button)
+
+        key_warning_lbl = QLabel(
+            "⚠️ PERHATIAN: Simpan kedua kunci secara manual! Sistem tidak menyimpan kunci ke database atau log."
+        )
+        key_warning_lbl.setStyleSheet("color: #B45309; font-size: 11px; font-weight: 500;")
+        gen_toolbar.addWidget(key_warning_lbl)
+        gen_toolbar.addStretch()
+        layout.addLayout(gen_toolbar)
+
         keys_layout = QHBoxLayout()
 
         # Vigenere Key input
         vig_box = QVBoxLayout()
         vig_box.addWidget(QLabel("2. Kunci Vigenère (Alfabet A-Z):"))
+        vig_input_row = QHBoxLayout()
         self.enc_vig_key_input = QLineEdit()
         self.enc_vig_key_input.setPlaceholderText("Contoh: RAHASIA")
-        vig_box.addWidget(self.enc_vig_key_input)
+        vig_input_row.addWidget(self.enc_vig_key_input)
+
+        self.copy_vig_key_button = QPushButton("Salin Kunci")
+        self.copy_vig_key_button.setStyleSheet("padding: 4px 8px; font-size: 11px;")
+        self.copy_vig_key_button.clicked.connect(self._copy_vig_key_to_clipboard)
+        vig_input_row.addWidget(self.copy_vig_key_button)
+        vig_box.addLayout(vig_input_row)
         keys_layout.addLayout(vig_box)
 
         # AES Key input
@@ -99,10 +123,10 @@ class TextPage(QWidget):
         self.enc_aes_key_input.setPlaceholderText("Passphrase atau 64-karakter hex key")
         aes_input_row.addWidget(self.enc_aes_key_input)
 
-        gen_key_btn = QPushButton("Buat Kunci Acak")
-        gen_key_btn.setStyleSheet("padding: 4px 8px; font-size: 11px;")
-        gen_key_btn.clicked.connect(self._generate_random_key_clicked)
-        aes_input_row.addWidget(gen_key_btn)
+        self.copy_aes_key_button = QPushButton("Salin Kunci")
+        self.copy_aes_key_button.setStyleSheet("padding: 4px 8px; font-size: 11px;")
+        self.copy_aes_key_button.clicked.connect(self._copy_aes_key_to_clipboard)
+        aes_input_row.addWidget(self.copy_aes_key_button)
         aes_box.addLayout(aes_input_row)
 
         keys_layout.addLayout(aes_box)
@@ -176,10 +200,35 @@ class TextPage(QWidget):
 
         return widget
 
-    def _generate_random_key_clicked(self):
-        new_key = generate_random_aes_key()
-        self.enc_aes_key_input.setText(new_key)
-        self.show_message("Kunci acak 256-bit berhasil dibuat. Pastikan Anda menyimpannya untuk dekripsi!", is_error=False)
+    def _generate_keys_clicked(self):
+        vig_key, aes_key = generate_super_encryption_keys()
+        self.enc_vig_key_input.setText(vig_key)
+        self.enc_aes_key_input.setText(aes_key)
+        self.show_message(
+            "Kunci Vigenère dan AES berhasil dibuat secara otomatis! "
+            "PERINGATAN: Simpan kedua kunci ini sekarang. Kunci TIDAK disimpan ke database atau log.",
+            is_error=False,
+        )
+
+    def _copy_vig_key_to_clipboard(self):
+        text = self.enc_vig_key_input.text()
+        if text:
+            clipboard = QApplication.clipboard()
+            if clipboard is not None:
+                clipboard.setText(text)
+            self.show_message("Kunci Vigenère berhasil disalin ke clipboard.", is_error=False)
+        else:
+            self.show_message("Kunci Vigenère belum diisi.", is_error=True)
+
+    def _copy_aes_key_to_clipboard(self):
+        text = self.enc_aes_key_input.text()
+        if text:
+            clipboard = QApplication.clipboard()
+            if clipboard is not None:
+                clipboard.setText(text)
+            self.show_message("Kunci / passphrase AES berhasil disalin ke clipboard.", is_error=False)
+        else:
+            self.show_message("Kunci / passphrase AES belum diisi.", is_error=True)
 
     def _copy_encrypted_to_clipboard(self):
         text = self.enc_result_output.toPlainText()

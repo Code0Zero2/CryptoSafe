@@ -15,9 +15,21 @@ from cryptosafe.database.usb_repository import UsbRepository, UsbCredential
 
 logger = logging.getLogger("cryptosafe.usb")
 
-TOKEN_FILENAME = "cryptosafe_token.key"
+TOKEN_DIR_NAME = ".cryptosafe"
+TOKEN_FILENAME = "token.dat"
+LEGACY_TOKEN_FILENAME = "cryptosafe_token.key"
 TOKEN_VERSION = 1
 CLIENT_KEY_CONTEXT = b"cryptosafe-usb-client-key"
+
+
+@dataclass(frozen=True)
+class UsbDriveInfo:
+    root_path: Path
+    label: str
+    drive_type: str
+    is_removable: bool
+    has_token: bool = False
+
 
 @dataclass(frozen=True)
 class UsbChallenge:
@@ -26,6 +38,7 @@ class UsbChallenge:
     challenge_bytes: bytes
     expires_at: datetime
 
+
 class UsbTokenService:
     """Service managing USB token detection, enrollment, and HMAC-SHA256 challenge-response."""
 
@@ -33,43 +46,154 @@ class UsbTokenService:
         self._repo = usb_repo
         self._active_challenges: dict[str, UsbChallenge] = {}
 
+    def get_available_drives(self) -> list[UsbDriveInfo]:
+        """Detect potential removable USB flash drives and candidate drive mount points."""
+        drives: list[UsbDriveInfo] = []
+        if sys.platform.startswith("win"):
+            import ctypes
+            # Scan Windows drive letters C: through Z:
+            for letter in string.ascii_uppercase[2:]:
+                root_str = f"{letter}:\\"
+                try:
+                    dtype = ctypes.windll.kernel32.GetDriveTypeW(root_str)
+                    if dtype in (0, 1):  # Unknown or no root directory
+                        continue
+
+                    is_removable = (dtype == 2)  # DRIVE_REMOVABLE
+                    type_str = "Removable" if is_removable else ("Fixed" if dtype == 3 else "Other")
+
+                    vol_buf = ctypes.create_unicode_buffer(261)
+                    fs_buf = ctypes.create_unicode_buffer(261)
+                    res = ctypes.windll.kernel32.GetVolumeInformationW(
+                        root_str,
+                        vol_buf,
+                        ctypes.sizeof(vol_buf),
+                        None,
+                        None,
+                        None,
+                        fs_buf,
+                        ctypes.sizeof(fs_buf),
+                    )
+                    vol_name = vol_buf.value if res and vol_buf.value else f"Drive ({letter}:)"
+
+                    root_p = Path(root_str)
+                    has_token = (
+                        (root_p / TOKEN_DIR_NAME / TOKEN_FILENAME).is_file()
+                        or (root_p / TOKEN_FILENAME).is_file()
+                        or (root_p / LEGACY_TOKEN_FILENAME).is_file()
+                    )
+                    drives.append(
+                        UsbDriveInfo(
+                            root_path=root_p,
+                            label=vol_name,
+                            drive_type=type_str,
+                            is_removable=is_removable,
+                            has_token=has_token,
+                        )
+                    )
+                except Exception:
+                    continue
+        else:
+            mount_roots = [
+                Path("/media"),
+                Path("/mnt"),
+                Path("/Volumes"),
+            ]
+            import os
+            user_env = os.environ.get("USER", "")
+            if user_env:
+                mount_roots.append(Path(f"/run/media/{user_env}"))
+
+            for mroot in mount_roots:
+                if mroot.exists() and mroot.is_dir():
+                    for sub in mroot.iterdir():
+                        if sub.is_dir():
+                            has_token = (
+                                (sub / TOKEN_DIR_NAME / TOKEN_FILENAME).is_file()
+                                or (sub / TOKEN_FILENAME).is_file()
+                                or (sub / LEGACY_TOKEN_FILENAME).is_file()
+                            )
+                            drives.append(
+                                UsbDriveInfo(
+                                    root_path=sub,
+                                    label=sub.name,
+                                    drive_type="Removable",
+                                    is_removable=True,
+                                    has_token=has_token,
+                                )
+                            )
+
+        # Sort so removable flash drives are listed first
+        drives.sort(key=lambda d: (not d.is_removable, str(d.root_path)))
+        return drives
+
     def get_candidate_drive_roots(self) -> list[Path]:
         """Detect potential removable drive roots or common mount points."""
+        drives = self.get_available_drives()
+        if drives:
+            return [d.root_path for d in drives]
+
         candidates: list[Path] = []
         if sys.platform.startswith("win"):
-            # Scan Windows drive letters D: through Z:
-            for letter in string.ascii_uppercase[3:]:
+            for letter in string.ascii_uppercase[2:]:
                 drive_path = Path(f"{letter}:\\")
                 if drive_path.exists():
                     candidates.append(drive_path)
-        else:
-            # Linux / macOS common mount points
-            for mount_root in [Path("/media"), Path("/mnt"), Path("/Volumes")]:
-                if mount_root.exists():
-                    for sub in mount_root.iterdir():
-                        if sub.is_dir():
-                            candidates.append(sub)
         return candidates
+
+    def _is_valid_token_file(self, token_path: Path) -> bool:
+        if not token_path.is_file():
+            return False
+        try:
+            with open(token_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return (
+                data.get("version") == TOKEN_VERSION
+                and "token_id" in data
+                and "token_secret" in data
+                and len(bytes.fromhex(data["token_secret"])) == 32
+            )
+        except Exception:
+            return False
 
     def detect_token_file(self, search_paths: list[Path] | None = None) -> Path | None:
         """Scan specified paths or candidate drives for a valid token file."""
         paths_to_check = search_paths if search_paths is not None else self.get_candidate_drive_roots()
         for candidate in paths_to_check:
-            token_path = candidate / TOKEN_FILENAME if candidate.is_dir() else candidate
-            if token_path.is_file():
-                try:
-                    with open(token_path, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                    if data.get("version") == TOKEN_VERSION and "token_id" in data and "token_secret" in data:
-                        return token_path
-                except (json.JSONDecodeError, OSError):
-                    continue
+            if candidate.is_file():
+                if self._is_valid_token_file(candidate):
+                    return candidate
+            elif candidate.is_dir():
+                # Primary modern location: .cryptosafe/token.dat
+                p1 = candidate / TOKEN_DIR_NAME / TOKEN_FILENAME
+                if self._is_valid_token_file(p1):
+                    return p1
+
+                # Legacy or flat locations
+                p2 = candidate / TOKEN_FILENAME
+                if self._is_valid_token_file(p2):
+                    return p2
+
+                p3 = candidate / LEGACY_TOKEN_FILENAME
+                if self._is_valid_token_file(p3):
+                    return p3
+
+                if candidate.name == TOKEN_DIR_NAME:
+                    p4 = candidate / TOKEN_FILENAME
+                    if self._is_valid_token_file(p4):
+                        return p4
         return None
 
     def enroll_token(self, user_id: int, target_dir: Path) -> tuple[UsbCredential, Path]:
-        """Generate a new token secret, write to target media, and persist verifier in DB."""
-        if not target_dir.exists() or not target_dir.is_dir():
+        """Generate a new token secret, write to .cryptosafe/token.dat on target media, and persist verifier in DB."""
+        if not target_dir.exists():
             raise ValidationError("Direktori drive USB target tidak valid atau tidak dapat diakses.")
+
+        # Target directory resolution: use .cryptosafe subdirectory without formatting or deleting files
+        if target_dir.name == TOKEN_DIR_NAME:
+            token_dir = target_dir
+        else:
+            token_dir = target_dir / TOKEN_DIR_NAME
 
         token_id = secrets.token_hex(16)
         raw_secret = secrets.token_bytes(32)
@@ -84,18 +208,24 @@ class UsbTokenService:
         digest.update(client_key)
         stored_key = digest.finalize()
 
-        # Write token file to USB media
-        token_file_path = target_dir / TOKEN_FILENAME
+        # Write token file into .cryptosafe directory on the flashdisk
+        token_file_path = token_dir / TOKEN_FILENAME
+        now_iso = datetime.now(timezone.utc).isoformat()
         payload = {
             "version": TOKEN_VERSION,
+            "app": "CRYPTOSAFE",
             "token_id": token_id,
             "token_secret": raw_secret.hex(),
+            "created_at": now_iso,
         }
         try:
+            token_dir.mkdir(parents=True, exist_ok=True)
             with open(token_file_path, "w", encoding="utf-8") as f:
                 json.dump(payload, f, indent=2)
-        except OSError as err:
-            raise ValidationError(f"Gagal menulis file token ke media USB: {err}")
+        except (PermissionError, OSError) as err:
+            raise ValidationError(
+                f"Gagal menulis file token ke media USB (media read-only atau tidak dapat diakses): {err}"
+            )
 
         # Persist verifier in database (never raw_secret)
         credential = self._repo.create_credential(user_id, token_id, stored_key.hex())
@@ -139,7 +269,7 @@ class UsbTokenService:
         if challenge.user_id != user_id:
             raise AuthenticationError("Challenge USB tidak cocok dengan akun pengguna.")
 
-        # 2. Token file validation
+        # 2. Token file validation & handling of disconnected or missing token
         if not token_path.is_file():
             raise AuthenticationError("File token USB tidak ditemukan pada media.")
 
@@ -150,6 +280,8 @@ class UsbTokenService:
             raw_secret = bytes.fromhex(token_data["token_secret"])
             if len(raw_secret) != 32:
                 raise ValueError("Panjang secret tidak valid.")
+        except (OSError, PermissionError):
+            raise AuthenticationError("Flashdisk dicabut atau media USB tidak dapat dibaca saat verifikasi.")
         except Exception:
             raise AuthenticationError("Format file token USB rusak atau tidak valid.")
 

@@ -9,10 +9,13 @@ if str(src_dir) not in sys.path:
 
 from cryptosafe.crypto.key_manager import (
     DEFAULT_PBKDF2_ITERATIONS,
+    DEFAULT_VIGENERE_KEY_LENGTH,
     SALT_LENGTH_BYTES,
     KDF_PBKDF2,
     KDF_DIRECT,
     generate_random_aes_key,
+    generate_vigenere_key,
+    generate_super_encryption_keys,
     generate_salt,
     is_direct_hex_key,
     derive_key_from_passphrase,
@@ -93,6 +96,46 @@ class TestKeyManager(unittest.TestCase):
             resolve_encryption_key("")
         with self.assertRaises(ValidationError):
             resolve_encryption_key("   ")
+
+    def test_generate_vigenere_key(self):
+        # Default length 16
+        key = generate_vigenere_key()
+        self.assertEqual(len(key), 16)
+        self.assertTrue(key.isalpha())
+        self.assertTrue(key.isupper())
+
+        # Custom length
+        key24 = generate_vigenere_key(length=24)
+        self.assertEqual(len(key24), 24)
+        self.assertTrue(key24.isalpha())
+        self.assertTrue(key24.isupper())
+
+        # Randomness: two consecutive keys should not be equal
+        key_b = generate_vigenere_key()
+        self.assertNotEqual(key, key_b)
+
+        # Invalid length
+        with self.assertRaises(ValidationError):
+            generate_vigenere_key(0)
+        with self.assertRaises(ValidationError):
+            generate_vigenere_key(-5)
+
+    def test_generate_super_encryption_keys(self):
+        vig_key, aes_key = generate_super_encryption_keys()
+        self.assertEqual(len(vig_key), 16)
+        self.assertTrue(vig_key.isalpha())
+        self.assertTrue(vig_key.isupper())
+
+        self.assertEqual(len(aes_key), 64)
+        self.assertTrue(is_direct_hex_key(aes_key))
+
+        # Keys must be distinct
+        self.assertNotEqual(vig_key, aes_key)
+
+        # Randomness across calls
+        vig_key2, aes_key2 = generate_super_encryption_keys()
+        self.assertNotEqual(vig_key, vig_key2)
+        self.assertNotEqual(aes_key, aes_key2)
 
 
 class TestAesGcm(unittest.TestCase):
@@ -374,6 +417,32 @@ class TestTextCryptoService(unittest.TestCase):
         res = self.service.encrypt("", self.vig_key, self.passphrase)
         recovered = self.service.decrypt(res, self.vig_key, self.passphrase)
         self.assertEqual(recovered, "")
+
+    def test_auto_generated_keys_encryption_decryption_round_trip(self):
+        vig_key, aes_key = generate_super_encryption_keys()
+        self.assertNotEqual(vig_key, aes_key)
+
+        env_str = self.service.encrypt(self.plaintext, vig_key, aes_key)
+        env_data = json.loads(env_str)
+        self.assertEqual(env_data["kdf"], KDF_DIRECT)
+
+        # Successful decryption with the same keys
+        recovered = self.service.decrypt(env_str, vig_key, aes_key)
+        self.assertEqual(recovered, self.plaintext)
+
+        # Wrong AES key fails AEAD authentication
+        with self.assertRaises(CryptoOperationError):
+            self.service.decrypt(env_str, vig_key, generate_random_aes_key())
+
+        # Wrong Vigenere key returns scrambled plaintext
+        scrambled = self.service.decrypt(env_str, generate_vigenere_key(), aes_key)
+        self.assertNotEqual(scrambled, self.plaintext)
+
+    def test_service_generate_keys_convenience_method(self):
+        vig_key, aes_key = self.service.generate_keys()
+        self.assertEqual(len(vig_key), 16)
+        self.assertEqual(len(aes_key), 64)
+        self.assertNotEqual(vig_key, aes_key)
 
 
 if __name__ == "__main__":

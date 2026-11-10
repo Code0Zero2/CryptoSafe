@@ -1,11 +1,11 @@
-﻿"""Contract management page with encrypted notes."""
+"""Contract management page with encrypted notes."""
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QDialog,
     QFormLayout, QLineEdit, QTextEdit, QComboBox, QMessageBox,
-    QInputDialog,
+    QInputDialog, QFileDialog,
 )
 
 from cryptosafe.database.contract_repository import VALID_STATUSES
@@ -21,11 +21,13 @@ class ContractPage(QWidget):
         self,
         contract_repository,
         message_service,
+        file_service=None,
         parent=None,
     ):
         super().__init__(parent)
         self._contract_repository = contract_repository
         self._message_service = message_service
+        self._file_service = file_service
         self._user_id = None
         self._setup_ui()
 
@@ -83,7 +85,7 @@ class ContractPage(QWidget):
             QHeaderView.ResizeMode.Stretch
         )
         self.contract_table.itemSelectionChanged.connect(
-            self._refresh_messages
+            self._on_contract_selected
         )
         layout.addWidget(self.contract_table)
 
@@ -138,6 +140,43 @@ class ContractPage(QWidget):
         )
         layout.addWidget(self.message_table)
 
+        layout.addWidget(QLabel("Lampiran Berkas Kontrak (Secure File Vault)"))
+
+        file_buttons = QHBoxLayout()
+
+        self.add_file_button = QPushButton("Tambah Lampiran")
+        self.add_file_button.clicked.connect(self._add_file)
+        file_buttons.addWidget(self.add_file_button)
+
+        self.download_file_button = QPushButton("Unduh / Dekripsi Berkas")
+        self.download_file_button.clicked.connect(self._download_file)
+        file_buttons.addWidget(self.download_file_button)
+
+        self.delete_file_button = QPushButton("Hapus Lampiran")
+        self.delete_file_button.clicked.connect(self._delete_file)
+        file_buttons.addWidget(self.delete_file_button)
+
+        file_buttons.addStretch()
+        layout.addLayout(file_buttons)
+
+        self.file_table = QTableWidget(0, 5)
+        self.file_table.setHorizontalHeaderLabels([
+            "ID", "Nama Berkas", "Ukuran", "Algoritma", "Tanggal Dibuat",
+        ])
+        self.file_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+        self.file_table.setSelectionMode(
+            QTableWidget.SelectionMode.SingleSelection
+        )
+        self.file_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+        self.file_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+        layout.addWidget(self.file_table)
+
     def set_user(self, user_id: int):
         """Set the authenticated user and refresh their contracts."""
         self._user_id = user_id
@@ -146,6 +185,7 @@ class ContractPage(QWidget):
     def refresh_contracts(self):
         self.contract_table.setRowCount(0)
         self.message_table.setRowCount(0)
+        self.file_table.setRowCount(0)
 
         if self._user_id is None:
             return
@@ -481,3 +521,186 @@ class ContractPage(QWidget):
             self._refresh_messages()
         except ValidationError as err:
             QMessageBox.warning(self, "Gagal", str(err))
+
+    def _on_contract_selected(self):
+        self._refresh_messages()
+        self._refresh_files()
+
+    def _selected_file_id(self):
+        row = self.file_table.currentRow()
+        if row < 0:
+            return None
+
+        item = self.file_table.item(row, 0)
+        if item is None:
+            return None
+
+        return item.data(Qt.ItemDataRole.UserRole)
+
+    @staticmethod
+    def _format_size(size_bytes: int) -> str:
+        if size_bytes < 1024:
+            return f"{size_bytes} B"
+        elif size_bytes < 1024 * 1024:
+            return f"{size_bytes / 1024:.1f} KB"
+        else:
+            return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+    def _refresh_files(self):
+        self.file_table.setRowCount(0)
+
+        contract_id = self._selected_contract_id()
+        if contract_id is None or self._user_id is None or self._file_service is None:
+            return
+
+        files = self._file_service.list_by_contract(
+            contract_id, self._user_id
+        )
+
+        for file_item in files:
+            row = self.file_table.rowCount()
+            self.file_table.insertRow(row)
+
+            values = [
+                file_item.id,
+                file_item.original_filename,
+                self._format_size(file_item.size_bytes),
+                file_item.algorithm,
+                file_item.created_at,
+            ]
+
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(str(value))
+                if column == 0:
+                    item.setData(Qt.ItemDataRole.UserRole, file_item.id)
+                self.file_table.setItem(row, column, item)
+
+    def _add_file(self):
+        contract_id = self._selected_contract_id()
+        if contract_id is None:
+            QMessageBox.warning(
+                self, "Peringatan", "Pilih kontrak terlebih dahulu."
+            )
+            return
+
+        if self._file_service is None:
+            QMessageBox.warning(
+                self, "Peringatan", "Layanan file vault belum tersedia."
+            )
+            return
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Pilih Berkas Lampiran Kontrak"
+        )
+        if not file_path:
+            return
+
+        key_material, accepted = QInputDialog.getText(
+            self,
+            "Enkripsi Lampiran Berkas",
+            "Masukkan Passphrase atau Hex Key (ChaCha20-Poly1305):",
+            QLineEdit.EchoMode.Password,
+        )
+        if not accepted or not key_material.strip():
+            return
+
+        try:
+            record = self._file_service.attach_file(
+                contract_id=contract_id,
+                user_id=self._user_id,
+                source_path=file_path,
+                key_material=key_material.strip(),
+            )
+            self._refresh_files()
+            QMessageBox.information(
+                self,
+                "Berhasil",
+                f"Berkas '{record.original_filename}' berhasil dienkripsi dan disimpan ke vault.",
+            )
+        except Exception as err:
+            QMessageBox.warning(self, "Gagal Melampirkan Berkas", str(err))
+
+    def _download_file(self):
+        file_id = self._selected_file_id()
+        if file_id is None:
+            QMessageBox.warning(
+                self, "Peringatan", "Pilih berkas lampiran terlebih dahulu."
+            )
+            return
+
+        if self._file_service is None:
+            return
+
+        file_record = self._file_service.get_file(file_id, self._user_id)
+        if file_record is None:
+            QMessageBox.warning(
+                self, "Gagal", "Data lampiran tidak ditemukan."
+            )
+            return
+
+        suggested_name = file_record.original_filename
+        save_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Simpan Berkas Hasil Dekripsi",
+            suggested_name,
+        )
+        if not save_path:
+            return
+
+        key_material, accepted = QInputDialog.getText(
+            self,
+            "Dekripsi Lampiran Berkas",
+            "Masukkan Passphrase atau Hex Key (ChaCha20-Poly1305):",
+            QLineEdit.EchoMode.Password,
+        )
+        if not accepted or not key_material.strip():
+            return
+
+        try:
+            self._file_service.export_decrypted_file(
+                file_id=file_id,
+                user_id=self._user_id,
+                destination_path=save_path,
+                key_material=key_material.strip(),
+            )
+            QMessageBox.information(
+                self,
+                "Berhasil",
+                f"Berkas berhasil didekripsi dan disimpan ke:\n{save_path}",
+            )
+        except Exception as err:
+            QMessageBox.warning(
+                self,
+                "Gagal Dekripsi Berkas",
+                f"Gagal mendekripsi berkas: {err}",
+            )
+
+    def _delete_file(self):
+        file_id = self._selected_file_id()
+        if file_id is None:
+            QMessageBox.warning(
+                self, "Peringatan", "Pilih berkas lampiran terlebih dahulu."
+            )
+            return
+
+        if self._file_service is None:
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Konfirmasi",
+            "Yakin ingin menghapus berkas lampiran ini dari vault?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            self._file_service.delete_file(file_id, self._user_id)
+            self._refresh_files()
+            QMessageBox.information(
+                self, "Berhasil", "Berkas lampiran berhasil dihapus dari vault."
+            )
+        except Exception as err:
+            QMessageBox.warning(self, "Gagal Menghapus Berkas", str(err))

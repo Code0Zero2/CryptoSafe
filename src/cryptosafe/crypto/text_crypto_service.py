@@ -5,6 +5,8 @@ from cryptosafe.common.errors import CryptoOperationError, ValidationError
 from cryptosafe.crypto.vigenere import vigenere_encrypt, vigenere_decrypt
 from cryptosafe.crypto.key_manager import (
     DEFAULT_PBKDF2_ITERATIONS,
+    DEFAULT_VIGENERE_KEY_LENGTH,
+    generate_super_encryption_keys,
     resolve_encryption_key,
     resolve_decryption_key,
 )
@@ -16,6 +18,13 @@ logger = logging.getLogger("cryptosafe.crypto.text")
 
 class TextCryptoService:
     """Service orchestrating Vigenère + AES-256-GCM super-encryption for text messages."""
+
+    def generate_keys(
+        self,
+        vigenere_length: int = DEFAULT_VIGENERE_KEY_LENGTH,
+    ) -> tuple[str, str]:
+        """Generate distinct cryptographically secure Vigenère and AES keys."""
+        return generate_super_encryption_keys(vigenere_length=vigenere_length)
 
     def encrypt(
         self,
