@@ -3,7 +3,7 @@
 import sqlite3
 from datetime import datetime, timezone
 
-CURRENT_SCHEMA_VERSION = 4
+CURRENT_SCHEMA_VERSION = 5
 
 MIGRATION_V1 = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -123,6 +123,42 @@ CREATE INDEX IF NOT EXISTS idx_files_user_id
 ON contract_files(user_id);
 """
 
+MIGRATION_V5 = """
+CREATE TABLE IF NOT EXISTS blockchain_blocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    block_index INTEGER NOT NULL UNIQUE,
+    timestamp TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    asset_id TEXT NOT NULL,
+    asset_hash TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    previous_hash TEXT NOT NULL,
+    block_hash TEXT NOT NULL,
+    created_by INTEGER REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_blockchain_index
+ON blockchain_blocks(block_index);
+
+CREATE INDEX IF NOT EXISTS idx_blockchain_asset_id
+ON blockchain_blocks(asset_id);
+
+CREATE INDEX IF NOT EXISTS idx_blockchain_asset_hash
+ON blockchain_blocks(asset_hash);
+
+CREATE TRIGGER IF NOT EXISTS prevent_blockchain_update
+BEFORE UPDATE ON blockchain_blocks
+BEGIN
+    SELECT RAISE(ABORT, 'Blockchain blocks are immutable and cannot be updated.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS prevent_blockchain_delete
+BEFORE DELETE ON blockchain_blocks
+BEGIN
+    SELECT RAISE(ABORT, 'Blockchain blocks are immutable and cannot be deleted.');
+END;
+"""
+
 
 def init_db(conn: sqlite3.Connection) -> None:
     """Initialize or migrate the database schema."""
@@ -158,5 +194,13 @@ def init_db(conn: sqlite3.Connection) -> None:
         if not cur.fetchone():
             cur.execute(
                 "INSERT INTO schema_version (version, applied_at) VALUES (4, ?)",
+                (now_iso,)
+            )
+
+        conn.executescript(MIGRATION_V5)
+        cur.execute("SELECT version FROM schema_version WHERE version = 5")
+        if not cur.fetchone():
+            cur.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (5, ?)",
                 (now_iso,)
             )

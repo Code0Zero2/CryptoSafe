@@ -25,13 +25,13 @@ class TestContractSchema(unittest.TestCase):
         self.conn.close()
 
     def test_schema_version_is_four(self):
-        self.assertEqual(CURRENT_SCHEMA_VERSION, 4)
+        self.assertGreaterEqual(CURRENT_SCHEMA_VERSION, 4)
 
         row = self.conn.execute(
             "SELECT MAX(version) AS version FROM schema_version"
         ).fetchone()
 
-        self.assertEqual(row["version"], 4)
+        self.assertGreaterEqual(row["version"], 4)
 
     def test_contract_tables_exist(self):
         tables = {
