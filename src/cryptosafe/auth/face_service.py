@@ -11,12 +11,36 @@ import cv2
 import numpy as np
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptosafe.common.errors import AuthenticationError, ValidationError
-from cryptosafe.database.face_repository import FaceRepository, FaceProfile
+from cryptosafe.crypto.key_manager import (
+    DEFAULT_PBKDF2_ITERATIONS,
+    KEY_LENGTH_BYTES,
+    SALT_LENGTH_BYTES,
+    derive_key_from_passphrase,
+)
+from typing import Any
+from cryptosafe.database.face_repository import FaceProfile, FaceRepository
 
 logger = logging.getLogger("cryptosafe.face")
 
 MODEL_NAME = "OpenCV-Haar-L2Norm"
 MODEL_VERSION = "1.0.0"
+ENVELOPE_VERSION = 1
+ALGORITHM_NAME = "AES-256-GCM"
+KDF_PBKDF2 = "PBKDF2-HMAC-SHA256"
+KDF_DIRECT = "DIRECT-AES-256"
+NONCE_LENGTH_BYTES = 12
+
+MIN_PBKDF2_ITERATIONS = 100_000
+MAX_PBKDF2_ITERATIONS = 2_000_000
+SUPPORTED_SHAPES = {(4096,), (64, 64)}
+SUPPORTED_DTYPE = "float32"
+
+
+def compute_face_aad(user_id: int) -> bytes:
+    """Compute Additional Authenticated Data (AAD) for AES-256-GCM binding to user_id."""
+    if not isinstance(user_id, int) or isinstance(user_id, bool):
+        raise ValidationError(f"user_id harus berupa integer (diterima: {type(user_id).__name__}).")
+    return f"cryptosafe:face_profile:user_id={user_id}:v1".encode("utf-8")
 
 class FaceRecognizerAdapter(ABC):
     """Abstract adapter defining face detection and template extraction."""
@@ -97,11 +121,12 @@ class FaceService:
         face_repo: FaceRepository,
         adapter: FaceRecognizerAdapter | None = None,
         encryption_key: bytes | None = None,
+        pbkdf2_iterations: int = DEFAULT_PBKDF2_ITERATIONS,
     ):
         self._repo = face_repo
         self._adapter = adapter or OpenCvFaceAdapter()
-        # 256-bit key for AES-GCM template protection
-        self._aes_key = encryption_key or secrets.token_bytes(32)
+        self._static_key = encryption_key
+        self._pbkdf2_iterations = pbkdf2_iterations
 
     def capture_camera_frame(self, camera_index: int = 0) -> np.ndarray:
         """Capture a single image frame from local camera. Disposed immediately."""
@@ -116,40 +141,252 @@ class FaceService:
         finally:
             cap.release()
 
-    def _encrypt_template(self, template: np.ndarray) -> str:
-        """Encrypt biometric template using AES-256-GCM. Returns JSON envelope string."""
+    @staticmethod
+    def _validate_iterations(iterations: Any) -> int:
+        """Validate PBKDF2 iterations strictly against allowed integer bounds.
+
+        Rejects boolean, float, string, negative, zero, and values outside [100000, 2000000].
+        """
+        if not isinstance(iterations, int) or isinstance(iterations, bool):
+            raise ValidationError(
+                f"Iterasi PBKDF2 harus berupa integer (diterima: {type(iterations).__name__})."
+            )
+        if iterations < MIN_PBKDF2_ITERATIONS or iterations > MAX_PBKDF2_ITERATIONS:
+            raise ValidationError(
+                f"Iterasi PBKDF2 ({iterations}) di luar batas aman [{MIN_PBKDF2_ITERATIONS}, {MAX_PBKDF2_ITERATIONS}]."
+            )
+        return iterations
+
+    def _validate_template(self, template: np.ndarray) -> None:
+        """Validate that biometric template array matches supported shapes and dtype."""
+        if not isinstance(template, np.ndarray):
+            raise ValidationError("Template biometrik harus berupa numpy ndarray.")
+        if template.shape not in SUPPORTED_SHAPES:
+            raise ValidationError(
+                f"Dimensi template biometrik {template.shape} tidak didukung (harus 64x64 atau 4096)."
+            )
+        if str(template.dtype) != SUPPORTED_DTYPE:
+            raise ValidationError(
+                f"Tipe data template '{template.dtype}' tidak didukung (harus float32)."
+            )
+
+    def _encrypt_template(
+        self,
+        template: np.ndarray,
+        user_id: int,
+        password: str | None = None,
+        key: bytes | None = None,
+    ) -> str:
+        """Encrypt biometric template using AES-256-GCM bound to user_id via AAD.
+
+        Derives key via PBKDF2-HMAC-SHA256 from password with a unique cryptographic salt per enrollment,
+        or uses a direct 256-bit AES key if provided. Fails if neither is available.
+        """
+        self._validate_template(template)
         raw_bytes = template.tobytes()
-        aesgcm = AESGCM(self._aes_key)
-        nonce = secrets.token_bytes(12)  # 96-bit nonce
-        ciphertext = aesgcm.encrypt(nonce, raw_bytes, None)
+
+        if password:
+            salt = secrets.token_bytes(SALT_LENGTH_BYTES)
+            iterations = self._validate_iterations(self._pbkdf2_iterations)
+            aes_key = derive_key_from_passphrase(password, salt, iterations)
+            kdf = KDF_PBKDF2
+            salt_hex = salt.hex()
+        elif key or self._static_key:
+            aes_key = key or self._static_key
+            if not isinstance(aes_key, bytes) or len(aes_key) != KEY_LENGTH_BYTES:
+                raise ValidationError(f"Kunci AES harus berukuran {KEY_LENGTH_BYTES} byte.")
+            salt = None
+            iterations = None
+            kdf = KDF_DIRECT
+            salt_hex = None
+        else:
+            raise ValidationError(
+                "Kata sandi akun atau kunci kriptografi diperlukan untuk mengenkripsi template wajah."
+            )
+
+        aad = compute_face_aad(user_id)
+        aesgcm = AESGCM(aes_key)
+        nonce = secrets.token_bytes(NONCE_LENGTH_BYTES)  # 96-bit nonce
+        ciphertext = aesgcm.encrypt(nonce, raw_bytes, aad)
+
         envelope = {
-            "version": 1,
+            "version": ENVELOPE_VERSION,
+            "algorithm": ALGORITHM_NAME,
+            "kdf": kdf,
+            "iterations": iterations,
+            "salt": salt_hex,
             "nonce": nonce.hex(),
             "ciphertext": ciphertext.hex(),
+            "aad_bound": True,
             "shape": list(template.shape),
             "dtype": str(template.dtype),
         }
         return json.dumps(envelope)
 
-    def _decrypt_template(self, encrypted_str: str) -> np.ndarray:
-        """Decrypt AES-256-GCM envelope and recover biometric template array."""
+    def _decrypt_template(
+        self,
+        encrypted_str: str,
+        user_id: int,
+        password: str | None = None,
+        key: bytes | None = None,
+    ) -> tuple[np.ndarray, bool]:
+        """Decrypt AES-256-GCM envelope and recover biometric template array.
+
+        Validates all envelope metadata strictly before invoking PBKDF2 or AES-GCM.
+        Binds authentication to user_id via AAD. Supports safe automatic migration
+        for legacy envelopes without AAD.
+
+        Returns:
+            tuple[np.ndarray, bool]: (template_array, needs_migration)
+        """
+        # 1. Parse JSON safely
         try:
+            if not isinstance(encrypted_str, str) or not encrypted_str.strip():
+                raise ValueError("Payload envelope kosong atau bukan string.")
             data = json.loads(encrypted_str)
-            nonce = bytes.fromhex(data["nonce"])
-            ciphertext = bytes.fromhex(data["ciphertext"])
-            shape = tuple(data["shape"])
-            dtype = np.dtype(data["dtype"])
-            aesgcm = AESGCM(self._aes_key)
-            decrypted_bytes = aesgcm.decrypt(nonce, ciphertext, None)
-            return np.frombuffer(decrypted_bytes, dtype=dtype).reshape(shape)
+            if not isinstance(data, dict):
+                raise ValueError("Format envelope bukan objek JSON.")
         except Exception:
             raise AuthenticationError("Data template wajah terenkripsi rusak atau tidak valid.")
+
+        # 2. Validate structural envelope fields
+        version = data.get("version")
+        if version != ENVELOPE_VERSION:
+            raise AuthenticationError(f"Versi envelope biometrik ({version}) tidak didukung.")
+
+        algorithm = data.get("algorithm")
+        if algorithm != ALGORITHM_NAME:
+            raise AuthenticationError(f"Algoritma biometrik '{algorithm}' tidak didukung.")
+
+        kdf = data.get("kdf")
+        if kdf not in (KDF_PBKDF2, KDF_DIRECT):
+            raise AuthenticationError(f"Metode KDF '{kdf}' tidak didukung.")
+
+        # 3. Validate shape & dtype
+        shape_raw = data.get("shape")
+        if not isinstance(shape_raw, (list, tuple)) or len(shape_raw) == 0:
+            raise AuthenticationError("Dimensi shape template biometrik tidak valid.")
+        if any(not isinstance(d, int) or isinstance(d, bool) or d <= 0 for d in shape_raw):
+            raise AuthenticationError("Elemen dimensi shape template harus berupa integer positif.")
+        shape = tuple(shape_raw)
+        if shape not in SUPPORTED_SHAPES:
+            raise AuthenticationError(
+                f"Dimensi shape template biometrik {shape} tidak didukung (harus 64x64 atau 4096)."
+            )
+
+        dtype_str = data.get("dtype")
+        if not isinstance(dtype_str, str) or dtype_str != SUPPORTED_DTYPE:
+            raise AuthenticationError(f"Tipe data dtype '{dtype_str}' tidak didukung (harus float32).")
+        try:
+            dtype = np.dtype(dtype_str)
+        except Exception:
+            raise AuthenticationError("Tipe data numpy template biometrik tidak valid.")
+
+        # 4. Validate nonce
+        nonce_hex = data.get("nonce")
+        if not isinstance(nonce_hex, str):
+            raise AuthenticationError("Field nonce tidak ditemukan atau bukan string.")
+        try:
+            nonce = bytes.fromhex(nonce_hex)
+        except ValueError:
+            raise AuthenticationError("Hexadecimal nonce tidak valid.")
+        if len(nonce) != NONCE_LENGTH_BYTES:
+            raise AuthenticationError(
+                f"Panjang nonce harus tepat {NONCE_LENGTH_BYTES} byte (diterima: {len(nonce)})."
+            )
+
+        # 5. Validate ciphertext
+        ct_hex = data.get("ciphertext")
+        if not isinstance(ct_hex, str):
+            raise AuthenticationError("Field ciphertext tidak ditemukan atau bukan string.")
+        try:
+            ciphertext = bytes.fromhex(ct_hex)
+        except ValueError:
+            raise AuthenticationError("Hexadecimal ciphertext tidak valid.")
+        if len(ciphertext) < 16:
+            raise AuthenticationError("Ciphertext terlalu pendek (minimal 16 byte untuk tag autentikasi).")
+
+        # 6. Validate KDF parameters & resolve key
+        if kdf == KDF_PBKDF2:
+            if not password:
+                raise AuthenticationError(
+                    "Kata sandi akun diperlukan untuk mendekripsi template biometrik wajah."
+                )
+            salt_hex = data.get("salt")
+            if not isinstance(salt_hex, str):
+                raise AuthenticationError("Field salt PBKDF2 tidak ditemukan atau bukan string.")
+            try:
+                salt = bytes.fromhex(salt_hex)
+            except ValueError:
+                raise AuthenticationError("Hexadecimal salt tidak valid.")
+            if len(salt) != SALT_LENGTH_BYTES:
+                raise AuthenticationError(
+                    f"Panjang salt PBKDF2 harus tepat {SALT_LENGTH_BYTES} byte (diterima: {len(salt)})."
+                )
+
+            raw_iterations = data.get("iterations")
+            if raw_iterations is None:
+                raise AuthenticationError("Field iterasi PBKDF2 wajib ada pada envelope.")
+            try:
+                iterations = self._validate_iterations(raw_iterations)
+            except ValidationError as err:
+                raise AuthenticationError(f"Validasi iterasi PBKDF2 gagal: {err}")
+
+            # Derive key strictly after all validation passes
+            aes_key = derive_key_from_passphrase(password, salt, iterations)
+
+        elif kdf == KDF_DIRECT:
+            aes_key = key or self._static_key
+            if not aes_key or len(aes_key) != KEY_LENGTH_BYTES:
+                raise AuthenticationError("Kunci dekripsi template biometrik tidak tersedia atau tidak valid.")
+
+        # 7. Decrypt with AES-GCM and verify AAD
+        aad = compute_face_aad(user_id)
+        aesgcm = AESGCM(aes_key)
+        needs_migration = False
+
+        is_aad_bound = data.get("aad_bound", False)
+
+        try:
+            # Primary decryption path: with user_id AAD
+            decrypted_bytes = aesgcm.decrypt(nonce, ciphertext, aad)
+        except Exception:
+            # If envelope was explicitly marked as aad_bound, it MUST fail (e.g. cross-account attack or wrong pass)
+            if is_aad_bound:
+                raise AuthenticationError(
+                    "Verifikasi biometrik gagal: template wajah tidak dapat didekripsi "
+                    "(kata sandi tidak cocok, akun tidak sesuai, atau data rusak). "
+                    "Jika kata sandi akun baru saja diubah, silakan daftarkan ulang profil wajah Anda."
+                )
+
+            # Legacy fallback: attempt decryption without AAD (associated_data=None)
+            try:
+                decrypted_bytes = aesgcm.decrypt(nonce, ciphertext, None)
+                needs_migration = True
+                logger.info(
+                    "Legacy face profile without AAD decrypted for user_id=%s. Will migrate upon verification.",
+                    user_id,
+                )
+            except Exception:
+                raise AuthenticationError(
+                    "Verifikasi biometrik gagal: template wajah tidak dapat didekripsi "
+                    "(kata sandi tidak cocok atau data rusak). "
+                    "Jika kata sandi akun baru saja diubah, silakan daftarkan ulang profil wajah Anda."
+                )
+
+        try:
+            template = np.frombuffer(decrypted_bytes, dtype=dtype).reshape(shape)
+            return template, needs_migration
+        except Exception:
+            raise AuthenticationError("Data buffer template biometrik tidak sesuai dengan shape atau dtype.")
 
     def enroll_face(
         self,
         user_id: int,
         image: np.ndarray,
         user_consent: bool,
+        password: str | None = None,
+        key: bytes | None = None,
     ) -> FaceProfile:
         """Enroll face template for a user after verifying explicit informed consent."""
         if not user_consent:
@@ -157,10 +394,12 @@ class FaceService:
 
         template = self._adapter.detect_and_extract_template(image)
         if template is None:
-            raise ValidationError("Wajah tidak terdeteksi pada gambar. Pastikan pencahayaan cukup dan wajah menghadap kamera.")
+            raise ValidationError(
+                "Wajah tidak terdeteksi pada gambar. Pastikan pencahayaan cukup dan wajah menghadap kamera."
+            )
 
-        # Encrypt template (raw image is NEVER stored)
-        encrypted_template = self._encrypt_template(template)
+        # Encrypt template (raw image is NEVER stored) bound to user_id via AAD
+        encrypted_template = self._encrypt_template(template, user_id=user_id, password=password, key=key)
         consent_time_iso = datetime.now(timezone.utc).isoformat()
 
         profile = self._repo.create_profile(
@@ -188,6 +427,8 @@ class FaceService:
         self,
         user_id: int,
         image: np.ndarray,
+        password: str | None = None,
+        key: bytes | None = None,
         threshold: float = 0.75,
     ) -> bool:
         """Verify face in image against user's stored encrypted template."""
@@ -195,7 +436,12 @@ class FaceService:
         if not profile:
             raise AuthenticationError("Pengguna tidak memiliki profil biometrik wajah aktif yang terdaftar.")
 
-        stored_template = self._decrypt_template(profile.encrypted_template)
+        stored_template, needs_migration = self._decrypt_template(
+            profile.encrypted_template,
+            user_id=user_id,
+            password=password,
+            key=key,
+        )
 
         probe_template = self._adapter.detect_and_extract_template(image)
         if probe_template is None:
@@ -207,5 +453,70 @@ class FaceService:
             logger.warning("Face biometric match failed for user_id=%s (similarity below threshold)", user_id)
             raise AuthenticationError("Verifikasi wajah gagal: wajah tidak cocok.")
 
+        # Auto-migrate legacy envelope to AAD-bound envelope upon successful face verification
+        if needs_migration and (password or key or self._static_key):
+            try:
+                migrated_envelope = self._encrypt_template(
+                    stored_template,
+                    user_id=user_id,
+                    password=password,
+                    key=key,
+                )
+                self._repo.create_profile(
+                    user_id=user_id,
+                    encrypted_template=migrated_envelope,
+                    model_name=profile.model_name,
+                    model_version=profile.model_version,
+                    consent_recorded_at=profile.consent_recorded_at,
+                )
+                logger.info("Successfully migrated legacy face profile to AAD-bound envelope for user_id=%s", user_id)
+            except Exception as err:
+                logger.warning("Auto-migration of legacy face profile failed for user_id=%s: %s", user_id, err)
+
         logger.info("Face biometric verification passed for user_id=%s", user_id)
         return True
+
+    def rekey_face_profile(
+        self,
+        user_id: int,
+        old_password: str,
+        new_password: str,
+    ) -> FaceProfile:
+        """Re-encrypt user's biometric template when user changes their account password."""
+        profile = self._repo.get_active_by_user_id(user_id)
+        if not profile:
+            raise ValidationError("Pengguna tidak memiliki profil biometrik wajah aktif untuk diperbarui.")
+
+        if not old_password or not new_password:
+            raise ValidationError(
+                "Kata sandi lama dan kata sandi baru diperlukan untuk memperbarui template biometrik."
+            )
+
+        # Decrypt with old password and user_id AAD
+        try:
+            stored_template, _ = self._decrypt_template(
+                profile.encrypted_template,
+                user_id=user_id,
+                password=old_password,
+            )
+        except AuthenticationError:
+            raise AuthenticationError(
+                "Gagal memperbarui template biometrik: kata sandi lama tidak dapat mendekripsi profil wajah saat ini."
+            )
+
+        # Re-encrypt with new password and user_id AAD (generates fresh salt and nonce)
+        new_encrypted_template = self._encrypt_template(
+            stored_template,
+            user_id=user_id,
+            password=new_password,
+        )
+
+        new_profile = self._repo.create_profile(
+            user_id=user_id,
+            encrypted_template=new_encrypted_template,
+            model_name=profile.model_name,
+            model_version=profile.model_version,
+            consent_recorded_at=profile.consent_recorded_at,
+        )
+        logger.info("Face biometric template re-keyed successfully for user_id=%s", user_id)
+        return new_profile

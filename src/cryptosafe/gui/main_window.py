@@ -12,6 +12,7 @@ from cryptosafe.gui.text_page import TextPage
 from cryptosafe.gui.file_page import FilePage
 from cryptosafe.gui.contract_page import ContractPage
 from cryptosafe.gui.usb_dialog import UsbEnrollDialog
+from cryptosafe.gui.face_capture_dialog import FaceCaptureDialog
 from cryptosafe.auth.auth_service import AuthService
 from cryptosafe.auth.usb_token_service import UsbTokenService
 from cryptosafe.auth.face_service import FaceService
@@ -27,7 +28,7 @@ from cryptosafe.database.encrypted_message_repository import EncryptedMessageRep
 from cryptosafe.database.encrypted_message_service import EncryptedMessageService
 from cryptosafe.database.contract_file_repository import ContractFileRepository
 from cryptosafe.database.contract_file_service import ContractFileService
-from cryptosafe.common.errors import AuthenticationError, ValidationError
+from cryptosafe.common.errors import AuthenticationError, AuthenticationCancelledError, ValidationError
 
 logger = logging.getLogger("cryptosafe.gui")
 
@@ -201,19 +202,33 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(1)
 
     def _on_login_requested(self, username: str, password: str):
+        def _capture_face_callback():
+            dialog = FaceCaptureDialog(self._face_service, mode="login", parent=self)
+            result = dialog.exec()
+            if result != QDialog.DialogCode.Accepted or dialog.captured_frame is None:
+                return None
+            return dialog.captured_frame
+
         try:
-            # Let auth_service handle password + USB + Face challenge
-            user = self._auth_service.authenticate_user(username, password)
+            # Let auth_service orchestrate all MFA factors sequentially
+            user = self._auth_service.authenticate_user(
+                username,
+                password,
+                face_capture_callback=_capture_face_callback,
+            )
             self._current_user = user
             self.dashboard_page.set_user(user.username)
             self.contract_page.set_user(user.id)
-            has_usb = self._usb_service.has_active_token(user.id)
-            has_face = self._face_service.has_active_profile(user.id)
+            has_usb = self._usb_service.has_active_token(user.id) if self._usb_service else False
+            has_face = self._face_service.has_active_profile(user.id) if self._face_service else False
             self.dashboard_page.set_usb_token_status(has_usb)
             self.dashboard_page.set_face_profile_status(has_face)
             self.login_page.reset_fields()
             self.stack.setCurrentIndex(1)
             logger.info("Session started for user: %s", user.username)
+        except AuthenticationCancelledError as err:
+            logger.info("Login cancelled during biometric step.")
+            self.login_page.show_error(str(err))
         except (AuthenticationError, ValidationError) as err:
             self.login_page.show_error(str(err))
 
@@ -299,17 +314,61 @@ class MainWindow(QMainWindow):
         if reply != QMessageBox.Yes:
             return
 
+        # Password confirmation for biometric key derivation
+        password, accepted = QInputDialog.getText(
+            self,
+            "Konfirmasi Kata Sandi",
+            "Masukkan kata sandi akun Anda untuk mengamankan template biometrik wajah:",
+            QLineEdit.EchoMode.Password,
+        )
+        if not accepted or not password:
+            return
+
+        if not self._auth_service._password_service.verify_password(
+            password, self._current_user.password_hash
+        ):
+            QMessageBox.warning(self, "Autentikasi Gagal", "Kata sandi salah. Pendaftaran wajah dibatalkan.")
+            return
+
+        # Open camera dialog for face capture
+        dialog = FaceCaptureDialog(self._face_service, mode="enroll", parent=self)
+        result = dialog.exec()
+        if result != QDialog.DialogCode.Accepted or dialog.captured_frame is None:
+            return
+
         try:
-            frame = self._face_service.capture_camera_frame()
-            self._face_service.enroll_face(self._current_user.id, frame, user_consent=True)
+            self._face_service.enroll_face(
+                self._current_user.id,
+                dialog.captured_frame,
+                user_consent=True,
+                password=password,
+            )
             self.dashboard_page.set_face_profile_status(True)
             QMessageBox.information(self, "Biometrik", "Pendaftaran profil biometrik wajah berhasil!")
+            logger.info("Face biometrics enrolled successfully for user: %s", self._current_user.username)
         except (AuthenticationError, ValidationError) as err:
+            logger.error("Failed to enroll face profile: %s", err)
             QMessageBox.warning(self, "Gagal Pendaftaran Wajah", str(err))
 
     def _on_revoke_face_requested(self):
         if not self._current_user:
             return
+
+        password, accepted = QInputDialog.getText(
+            self,
+            "Konfirmasi Pencabutan Wajah",
+            "Masukkan kata sandi akun untuk mencabut profil wajah:",
+            QLineEdit.EchoMode.Password,
+        )
+        if not accepted or not password:
+            return
+
+        if not self._auth_service._password_service.verify_password(
+            password, self._current_user.password_hash
+        ):
+            QMessageBox.warning(self, "Autentikasi Gagal", "Kata sandi salah. Pencabutan wajah dibatalkan.")
+            return
+
         self._face_service.revoke_face(self._current_user.id)
         self.dashboard_page.set_face_profile_status(False)
         QMessageBox.information(self, "Biometrik", "Profil biometrik wajah berhasil dicabut.")

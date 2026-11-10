@@ -2,8 +2,9 @@
 
 import re
 import logging
+from typing import Callable
 from pathlib import Path
-from cryptosafe.common.errors import AuthenticationError, ValidationError
+from cryptosafe.common.errors import AuthenticationError, AuthenticationCancelledError, ValidationError
 from cryptosafe.auth.password_service import PasswordService
 from cryptosafe.auth.usb_token_service import UsbTokenService
 from cryptosafe.auth.face_service import FaceService
@@ -59,10 +60,12 @@ class AuthService:
         password: str,
         usb_token_path: Path | None = None,
         face_image=None,
+        face_capture_callback: Callable[[], object] | None = None,
     ) -> User:
         """Authenticate user across active MFA factors: password, USB token, and face recognition.
 
-        Enforces rate limiting/throttling and establishes a UserSession on full success.
+        Enforces sequential factor verification (Password -> USB -> Face), rate limiting/throttling,
+        and establishes a UserSession only upon full success.
         """
         clean_username = username.strip()
         if not clean_username or not password:
@@ -102,10 +105,22 @@ class AuthService:
             # Factor 3: Face Recognition Biometrics (if enrolled)
             if self._face_service and self._face_service.has_active_profile(user.id):
                 target_image = face_image
+                if target_image is None and face_capture_callback is not None:
+                    try:
+                        target_image = face_capture_callback()
+                    except AuthenticationCancelledError:
+                        raise
+                    except Exception as err:
+                        logger.warning("Face capture callback failed: %s", err)
+                        raise AuthenticationError(f"Gagal memindai wajah: {err}")
+
+                    if target_image is None:
+                        raise AuthenticationCancelledError("Verifikasi wajah dibatalkan. Login tidak dapat dilanjutkan.")
+
                 if target_image is None:
                     target_image = self._face_service.capture_camera_frame()
 
-                self._face_service.verify_face(user.id, target_image)
+                self._face_service.verify_face(user.id, target_image, password=password)
                 logger.info("MFA Step 3 (Face Biometrics) passed for user: %s", user.username)
 
             # All active factors verified -> clear failures and establish session
@@ -114,6 +129,11 @@ class AuthService:
             logger.info("All authentication factors passed successfully for user: %s", user.username)
             return user
 
+        except AuthenticationCancelledError:
+            self._session_manager.terminate_session()
+            # Do NOT record failure on rate limiter for voluntary user cancellation
+            logger.info("Authentication cancelled by user during biometric step.")
+            raise
         except AuthenticationError:
             self._session_manager.terminate_session()
             self._rate_limiter.record_failure(clean_username)

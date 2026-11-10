@@ -61,12 +61,12 @@ class TestM5AuthenticationPipeline(unittest.TestCase):
         _, self.token_alice = self.usb_service.enroll_token(self.user_alice.id, self.usb_dir_alice)
         self.face_alice = make_synthetic_face(seed=101)
         self.face_alice_probe = np.clip(self.face_alice.astype(int) + np.random.randint(-3, 4, (64, 64)), 0, 255).astype(np.uint8)
-        self.face_service.enroll_face(self.user_alice.id, self.face_alice, user_consent=True)
+        self.face_service.enroll_face(self.user_alice.id, self.face_alice, user_consent=True, password="PassAlice123!")
 
         # Enroll Bob with distinct USB and Face
         _, self.token_bob = self.usb_service.enroll_token(self.user_bob.id, self.usb_dir_bob)
         self.face_bob = make_synthetic_face(seed=202)
-        self.face_service.enroll_face(self.user_bob.id, self.face_bob, user_consent=True)
+        self.face_service.enroll_face(self.user_bob.id, self.face_bob, user_consent=True, password="PassBob123!")
 
     def tearDown(self):
         self.conn.close()
