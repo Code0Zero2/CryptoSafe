@@ -11,62 +11,81 @@ Gunakan layered modular monolith untuk versi desktop awal:
 
 GUI tidak boleh mengimplementasikan algoritma kriptografi langsung. GUI memanggil service dan menampilkan hasil.
 
-## 2. Proposed project structure
+## 2. Project structure
 
 ```text
 CRYPTOSAFE/
 ├── main.py
 ├── requirements.txt
-├── pyproject.toml
-├── .env.example
 ├── .gitignore
 ├── README.md
 ├── docs/
+│   ├── ARCHITECTURE.md
+│   ├── DATABASE.md
+│   ├── DEVELOPMENT_GUIDE.md
+│   ├── PLAN.md
+│   ├── PROJECT_STATUS.md
+│   ├── REQUIREMENTS.md
+│   ├── SECURITY.md
+│   └── TESTING.md
 ├── src/
 │   └── cryptosafe/
 │       ├── __init__.py
 │       ├── app.py
 │       ├── config.py
-│       ├── gui/
-│       │   ├── login_page.py
-│       │   ├── register_page.py
-│       │   ├── dashboard_page.py
-│       │   ├── text_page.py
-│       │   ├── file_page.py
-│       │   ├── image_page.py
-│       │   └── blockchain_page.py
 │       ├── auth/
 │       │   ├── auth_service.py
+│       │   ├── face_service.py
 │       │   ├── password_service.py
-│       │   ├── usb_token_service.py
-│       │   └── face_service.py
+│       │   ├── rate_limiter.py
+│       │   ├── session_manager.py
+│       │   └── usb_token_service.py
+│       ├── common/
+│       │   ├── errors.py
+│       │   └── logging_config.py
 │       ├── crypto/
-│       │   ├── vigenere.py
-│       │   ├── text_envelope.py
+│       │   ├── aes_gcm.py
+│       │   ├── blockchain_service.py
+│       │   ├── chacha20.py
+│       │   ├── file_crypto_service.py
 │       │   ├── file_envelope.py
-│       │   └── key_manager.py
+│       │   ├── key_manager.py
+│       │   ├── steganography_service.py
+│       │   ├── text_crypto_service.py
+│       │   ├── text_envelope.py
+│       │   └── vigenere.py
 │       ├── database/
+│       │   ├── blockchain_repository.py
 │       │   ├── connection.py
+│       │   ├── contract_file_repository.py
+│       │   ├── contract_file_service.py
+│       │   ├── contract_repository.py
+│       │   ├── contract_service.py
+│       │   ├── encrypted_message_repository.py
+│       │   ├── encrypted_message_service.py
+│       │   ├── face_repository.py
 │       │   ├── schema.py
-│       │   ├── user_repository.py
-│       │   └── message_repository.py
-│       ├── steganography/
-│       │   ├── lsb_encoder.py
-│       │   └── lsb_decoder.py
-│       ├── blockchain/
-│       │   ├── block.py
-│       │   ├── chain.py
-│       │   └── verifier.py
-│       └── common/
-│           ├── errors.py
-│           └── logging_config.py
+│       │   ├── usb_repository.py
+│       │   └── user_repository.py
+│       └── gui/
+│           ├── audit_dialog.py
+│           ├── contract_page.py
+│           ├── dashboard_page.py
+│           ├── face_capture_dialog.py
+│           ├── file_page.py
+│           ├── login_page.py
+│           ├── main_window.py
+│           ├── register_page.py
+│           ├── stego_page.py
+│           ├── styles.py
+│           ├── text_page.py
+│           └── usb_dialog.py
 └── tests/
     ├── unit/
-    ├── integration/
-    └── fixtures/
+    └── integration/
 ```
 
-Agent boleh mengusulkan perubahan struktur jika ada alasan teknis, tetapi harus menjelaskan dan meminta persetujuan sebelum perubahan besar.
+Pemisahan tanggung jawab antar layer (Presentation, Application Services, Data Access/Repositories, dan Infrastructure) dijaga secara ketat untuk menjamin modularitas dan kemudahan pengujian independen.
 
 ## 3. Login sequence
 
@@ -109,7 +128,12 @@ Key material must be outside the database. Use an explicit key-management design
 
 ## 8. Data flow — blockchain
 
-Asset bytes → SHA-256 digest → block record containing previous block hash → deterministic canonical serialization → block hash.
+Asset bytes / canonical metadata snapshot → SHA-256 digest → block record containing previous block hash → deterministic canonical serialization → block hash.
+
+Integrated audit events:
+- Contracts: `CONTRACT_CREATED`, `CONTRACT_STATUS_UPDATED`, `CONTRACT_DELETED`.
+- Notes: `NOTE_CREATED`, `NOTE_UPDATED`, `NOTE_DELETED`.
+- Vault Files: `FILE_ATTACHED`, `FILE_DELETED`.
 
 Verification recomputes asset digest, block hashes, and previous-hash links.
 

@@ -178,12 +178,14 @@ CRYPTOSAFE/
 |   |-- cryptosafe.db           # SQLite application database
 |   `-- vault/                  # ChaCha20-Poly1305 encrypted file storage (*.enc)
 |-- docs/                       # Project specifications, security guides, and plans
-|   |-- PROJECT_STATUS.md       # Current feature status, test metrics, and backlog
-|   |-- DEVELOPMENT_GUIDE.md    # Developer setup, testing, and contribution manual
+|   |-- ARCHITECTURE.md         # System layered architecture & cryptographic data flows
 |   |-- DATABASE.md             # Schema design, tables, triggers, and indices
-|   |-- IMPLEMENTATION_GUIDE.md # Technical implementation details
+|   |-- DEVELOPMENT_GUIDE.md    # Developer setup, testing, and contribution manual
 |   |-- PLAN.md                 # Project milestones and task breakdown
-|   `-- SECURITY.md             # Threat model and security policies
+|   |-- PROJECT_STATUS.md       # Current feature status, test metrics, and backlog
+|   |-- REQUIREMENTS.md         # Software requirements specification (FR & NFR)
+|   |-- SECURITY.md             # Threat model and security policies
+|   `-- TESTING.md              # Test plan and verification matrices
 |-- src/
 |   `-- cryptosafe/
 |       |-- app.py              # Application lifecycle and PySide6 bootstrap

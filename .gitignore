@@ -1,3 +1,4 @@
+
 # Python environment & cache
 __pycache__/
 *.py[cod]
@@ -57,3 +58,12 @@ desktop.ini
 # Microsoft Office temporary / lock files
 ~$*.docx
 
+# AI agent files excluded from GitHub
+.agents/
+agent-kit/
+agents/
+prompts/
+
+# Project files excluded from GitHub
+RANGKUMAN_KEKURANGAN_CRYPTOSAFE.txt
+cryptosafe.spec

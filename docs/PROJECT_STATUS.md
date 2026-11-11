@@ -50,12 +50,23 @@ Pengujian dijalankan pada lingkungan Python 3.12 (CPython) menggunakan framework
   ```powershell
   python -m unittest discover -s tests -p "test_*.py"
   ```
-- **Hasil:**
-  - **Total Uji:** 319 skenario pengujian
+- **Hasil Pengujian Baseline Core Milestones (M1–M10):**
+  - **Total Uji Core:** 319 skenario pengujian inti
   - **Passed:** 318
   - **Skipped:** 1 (`test_usb_token_service.py` melewatkan pengujian deteksi drive sistem riil ketika dijalankan pada environment headless/mock)
   - **Failed / Errors:** 0
-  - **Waktu Eksekusi:** ~31 detik
+  - **Tingkat Kelulusan Core:** 100% dari pengujian aktif
+
+- **Hasil Pengujian Suite Lengkap Terkini (Pasca-Merge PR #2):**
+  - **Total Uji Terdeteksi:** 325 skenario pengujian
+  - **Passed:** 320
+  - **Skipped:** 1
+  - **Failed:** 2:
+    1. Assertion label tombol GUI pada `test_generate_key_button_workflow` (`test_text_crypto_gui.py`) yang tidak sesuai dengan label aktual berbahasa Indonesia (`'Buat Kunci Otomatis (Generate)'` vs ekspektasi tes `'Generate Key'`).
+    2. Kegagalan Haar face detection pada mock frame di `test_registration_with_usb_and_face_id` (`test_gui_prototype.py`).
+  - **Errors:** 2:
+    1. NumPy 2.x `uint8` modulo overflow pada `test_check_liveness_varying_frames_passes` (`test_face_recognition.py`).
+    2. Argumen `user_consent` yang belum diberikan pada pemanggilan `enroll_face()` di `test_verify_face_with_liveness_integration` (`test_face_recognition.py`).
 
 ### B. Pengujian Manual yang Diperlukan (Hardware In-the-Loop)
 1. **Verifikasi USB Token Fisik:**
@@ -80,6 +91,12 @@ Pengujian dijalankan pada lingkungan Python 3.12 (CPython) menggunakan framework
    - *Batasan:* Tidak menggunakan secure element chip (seperti YubiKey / CCID SmartCard). Jika drive USB dipinjam dan file `token.key` disalin oleh pihak lain, faktor kepemilikan dapat dikompromikan.
 4. **Residu File Vault Fisik saat IO Error:**
    - *Mitigasi saat ini:* `contract_file_service.py` memiliki fungsi `cleanup_orphan_vault_files()` dan pre-commit rollback cleanup. Namun, jika OS memblokir akses penghapusan file (misalnya terkunci oleh antivirus pihak ketiga saat operasi delete), file fisik dapat tertinggal sebagai *orphan* di `data/vault/`.
+5. **Regresi Test Suite Baru (PR #2):**
+   - *Temuan:* Penambahan pengujian anti-spoofing dan GUI registrasi baru di PR #2 memunculkan 4 masalah regresi yang teridentifikasi:
+     1. NumPy 2.x `uint8` modulo overflow pada `test_face_recognition.py`.
+     2. Argumen `user_consent` yang belum diberikan pada pemanggilan pengujian `enroll_face()`.
+     3. Assertion label tombol GUI yang tidak sesuai dengan label aktual berbahasa Indonesia di `test_text_crypto_gui.py`.
+     4. Kegagalan Haar face detection pada mock frame sintetis di `test_gui_prototype.py`.
 
 ---
 
@@ -90,8 +107,8 @@ Pengujian dijalankan pada lingkungan Python 3.12 (CPython) menggunakan framework
 | **TSK-01** | **High** | Verifikasi Manual Hardware (USB & Webcam) | **Pending** | **AC:** Pengembang melakukan enroll akun baru dengan USB flash drive fisik dan Face ID webcam nyata, memverifikasi login berhasil pada pengujian riil, dan mendokumentasikan log keberhasilan. |
 | **TSK-02** | **Medium** | Backup & Export Ledger Blockchain | **Completed** | **AC:** Fitur ekspor data blockchain ke format JSON dan CSV lengkap dengan verifikasi integritas rantai telah diimplementasikan di `blockchain_service.py` dan `AuditDialog`. |
 | **TSK-03** | **Medium** | Chunked Stream Encryption untuk File Ukuran Besar | **Completed** | **AC:** Enkripsi ChaCha20-Poly1305 berbasis stream/chunking 64 KB telah aktif dan teruji di `file_envelope.py` dan `file_crypto_service.py`. |
-| **TSK-04** | **Low** | Standalone Executable Packaging (PyInstaller) | **Completed** | **AC:** Konfigurasi `cryptosafe.spec` dan skrip pembangun `build_executable.py` telah disediakan untuk memaketkan aplikasi desktop mandiri. |
-| **TSK-05** | **Medium** | Anti-Spoofing & Liveness Detection Wajah | **Completed** | **AC:** Verifikasi variasi temporal (micro-movement) dan ketajaman tekstur Laplacian diintegrasikan ke `face_service.py` dan `face_capture_dialog.py`. |
+| **TSK-04** | **Low** | Standalone Executable Packaging (PyInstaller) | **Completed** | **AC:** Skrip pembangun `build_executable.py` disediakan untuk proses build PyInstaller secara lokal tanpa perlu menyertakan spesifikasi build ke repositori. |
+| **TSK-05** | **High** | Perbaikan Regresi Suite Uji Pasca-Merge PR #2 | **Pending** | **AC:** Mengatasi seluruh 4 masalah regresi uji: (1) perbaiki penanganan NumPy 2.x `uint8` modulo overflow pada `test_face_recognition.py`, (2) berikan argumen `user_consent` pada pemanggilan uji `enroll_face()`, (3) selaraskan assertion label tombol GUI dengan label aktual berbahasa Indonesia di `test_text_crypto_gui.py`, dan (4) tangani deteksi wajah Haar pada mock frame di `test_gui_prototype.py` sehingga seluruh 325 pengujian berstatus lulus (`Ran 325 tests, OK`). |
 
 ---
 
