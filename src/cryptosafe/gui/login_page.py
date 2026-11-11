@@ -80,7 +80,7 @@ class LoginPage(QWidget):
         devices_layout.setContentsMargins(10, 8, 10, 8)
 
         self.usb_status_label = QLabel("USB Token: Tidak Terdeteksi")
-        self.usb_status_label.setStyleSheet("color: #64748B; font-size: 11px; font-weight: 500; border: none;")
+        self.usb_status_label.setStyleSheet("color: #FF0000; font-size: 11px; font-weight: 500; border: none;")
         devices_layout.addWidget(self.usb_status_label)
 
         self.face_status_label = QLabel("Face Recognition: Siap diverifikasi")
@@ -142,7 +142,7 @@ class LoginPage(QWidget):
             self.usb_status_label.setStyleSheet("color: #059669; font-size: 11px; font-weight: 600; border: none;")
         else:
             self.usb_status_label.setText("USB Token: Tidak Terdeteksi (Pasang token jika akun menggunakan USB 2FA)")
-            self.usb_status_label.setStyleSheet("color: #64748B; font-size: 11px; font-weight: 500; border: none;")
+            self.usb_status_label.setStyleSheet("color: #FF0000; font-size: 11px; font-weight: 500; border: none;")
 
     def reset_fields(self):
         """Reset inputs and clear errors upon logout."""
