@@ -85,12 +85,13 @@ Pengujian dijalankan pada lingkungan Python 3.12 (CPython) menggunakan framework
 
 ## 5. Daftar Pekerjaan Tersisa (Backlog & Priorities)
 
-| ID | Prioritas | Fitur / Tugas | Deskripsi & Acceptance Criteria |
-| :---: | :---: | :--- | :--- |
-| **TSK-01** | **High** | Verifikasi Manual Hardware (USB & Webcam) | **AC:** Pengembang melakukan enroll akun baru dengan USB flash drive fisik dan Face ID webcam nyata, memverifikasi login berhasil pada pengujian riil, dan mendokumentasikan log keberhasilan. |
-| **TSK-02** | **Medium** | Backup & Export Ledger Blockchain | **AC:** Menyediakan fitur pada UI `AuditPage` untuk mengekspor data blockchain ke dalam format JSON/CSV bertanda tangan kriptografis untuk kebutuhan audit eksternal. |
-| **TSK-03** | **Medium** | Chunked Stream Encryption untuk File Ukuran Besar | **AC:** Implementasi enkripsi ChaCha20-Poly1305 berbasis stream/chunking per 1 MB agar berkas dokumen berukuran di atas 200 MB tidak membebani memori RAM secara utuh. |
-| **TSK-04** | **Low** | Standalone Executable Packaging (PyInstaller) | **AC:** Membuat skrip build PyInstaller atau cx_Freeze untuk menghasilkan standalone `.exe` di Windows lengkap dengan bundling model Haar Cascade OpenCV dan pustaka Qt6. |
+| ID | Prioritas | Fitur / Tugas | Status | Deskripsi & Acceptance Criteria |
+| :---: | :---: | :--- | :---: | :--- |
+| **TSK-01** | **High** | Verifikasi Manual Hardware (USB & Webcam) | **Pending** | **AC:** Pengembang melakukan enroll akun baru dengan USB flash drive fisik dan Face ID webcam nyata, memverifikasi login berhasil pada pengujian riil, dan mendokumentasikan log keberhasilan. |
+| **TSK-02** | **Medium** | Backup & Export Ledger Blockchain | **Completed** | **AC:** Fitur ekspor data blockchain ke format JSON dan CSV lengkap dengan verifikasi integritas rantai telah diimplementasikan di `blockchain_service.py` dan `AuditDialog`. |
+| **TSK-03** | **Medium** | Chunked Stream Encryption untuk File Ukuran Besar | **Completed** | **AC:** Enkripsi ChaCha20-Poly1305 berbasis stream/chunking 64 KB telah aktif dan teruji di `file_envelope.py` dan `file_crypto_service.py`. |
+| **TSK-04** | **Low** | Standalone Executable Packaging (PyInstaller) | **Completed** | **AC:** Konfigurasi `cryptosafe.spec` dan skrip pembangun `build_executable.py` telah disediakan untuk memaketkan aplikasi desktop mandiri. |
+| **TSK-05** | **Medium** | Anti-Spoofing & Liveness Detection Wajah | **Completed** | **AC:** Verifikasi variasi temporal (micro-movement) dan ketajaman tekstur Laplacian diintegrasikan ke `face_service.py` dan `face_capture_dialog.py`. |
 
 ---
 

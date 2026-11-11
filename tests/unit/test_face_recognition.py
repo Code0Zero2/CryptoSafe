@@ -766,5 +766,39 @@ class TestM4FaceRecognition(unittest.TestCase):
         self.assertEqual(mock_cap.read.call_count, 6)
         mock_cap.release.assert_called_once()
 
+    def test_check_liveness_static_identical_frames_fails(self):
+        """Identical freeze-frames or static printed photos fail liveness verification."""
+        frame1 = make_synthetic_face(seed=10)
+        frame2 = frame1.copy()
+        is_live, msg = FaceService.check_liveness([frame1, frame2])
+        self.assertFalse(is_live)
+        self.assertIn("statis", msg)
+
+    def test_check_liveness_varying_frames_passes(self):
+        """Natural varying frames with micro-movement pass liveness check."""
+        frame1 = make_synthetic_face(seed=10)
+        # Add subtle natural micro-movement
+        frame2 = frame1.copy()
+        frame2[10:30, 10:30] = (frame2[10:30, 10:30] + 5) % 256
+        is_live, msg = FaceService.check_liveness([frame1, frame2])
+        self.assertTrue(is_live)
+        self.assertIn("OK", msg)
+
+    def test_verify_face_with_liveness_integration(self):
+        """verify_face raises AuthenticationError when liveness verification fails."""
+        self.face_service.enroll_face(self.user_alice.id, self.face_alice, password="AlicePass123")
+
+        # Static identical frames trigger anti-spoofing rejection
+        static_frame = self.face_alice.copy()
+        with self.assertRaises(AuthenticationError) as cm:
+            self.face_service.verify_face(
+                self.user_alice.id,
+                self.face_alice,
+                password="AlicePass123",
+                liveness_frames=[static_frame, static_frame],
+            )
+        self.assertIn("liveness", str(cm.exception).lower())
+
+
 if __name__ == "__main__":
     unittest.main()

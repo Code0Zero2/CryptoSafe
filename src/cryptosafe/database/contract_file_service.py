@@ -1,5 +1,7 @@
 """Service coordinating file encryption and contract attachment storage."""
 
+from __future__ import annotations
+
 import hashlib
 import logging
 import mimetypes

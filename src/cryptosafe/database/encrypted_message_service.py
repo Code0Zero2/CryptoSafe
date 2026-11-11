@@ -1,5 +1,7 @@
 """Application service for encrypted contract notes with blockchain audit trail."""
 
+from __future__ import annotations
+
 from contextlib import nullcontext
 import hashlib
 import logging

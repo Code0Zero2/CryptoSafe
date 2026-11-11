@@ -14,6 +14,7 @@ from cryptosafe.gui.contract_page import ContractPage
 from cryptosafe.gui.usb_dialog import UsbEnrollDialog
 from cryptosafe.gui.face_capture_dialog import FaceCaptureDialog
 from cryptosafe.gui.stego_page import StegoPage
+from cryptosafe.gui.audit_dialog import AuditDialog
 from cryptosafe.auth.auth_service import AuthService
 from cryptosafe.auth.usb_token_service import UsbTokenService
 from cryptosafe.auth.face_service import FaceService
@@ -194,6 +195,7 @@ class MainWindow(QMainWindow):
         self.dashboard_page.open_file_crypto_requested.connect(self._on_open_file_crypto)
         self.dashboard_page.open_contract_requested.connect(self._on_open_contract)
         self.dashboard_page.open_steganography_requested.connect(self._on_open_steganography)
+        self.dashboard_page.open_audit_requested.connect(self._on_open_audit)
 
         self.text_page.back_to_dashboard_requested.connect(self._on_back_from_text_crypto)
         self.file_page.back_to_dashboard_requested.connect(self._on_back_from_file_crypto)
@@ -244,13 +246,17 @@ class MainWindow(QMainWindow):
         self.stego_page.clear_fields()
         self.stack.setCurrentIndex(1)
 
+    def _on_open_audit(self):
+        dialog = AuditDialog(self._blockchain_service, parent=self)
+        dialog.exec()
+
     def _on_login_requested(self, username: str, password: str):
         def _capture_face_callback():
             dialog = FaceCaptureDialog(self._face_service, mode="login", parent=self)
             result = dialog.exec()
             if result != QDialog.DialogCode.Accepted or dialog.captured_frame is None:
                 return None
-            return dialog.captured_frame
+            return (dialog.captured_frame, dialog.captured_liveness_frames)
 
         try:
             # Let auth_service orchestrate all MFA factors sequentially

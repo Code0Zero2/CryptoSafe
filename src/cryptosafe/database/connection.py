@@ -1,5 +1,7 @@
 """SQLite database connection and transaction manager."""
 
+from __future__ import annotations
+
 from collections.abc import Generator
 from contextlib import contextmanager
 import itertools

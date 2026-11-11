@@ -779,6 +779,48 @@ conn.close()
         self.assertEqual(len(rows), 1)
         self.assertEqual(self.service.conn, self.conn)
 
+    def test_export_chain_to_json(self):
+        """Verify export_chain_to_json produces a valid structured JSON audit ledger."""
+        self.service.ensure_genesis_block()
+        h1 = hashlib.sha256(b"Doc1").hexdigest()
+        self.service.append_block("CONTRACT_CREATED", "contract:1", h1, {"title": "Test Contract"})
+
+        export_file = self.temp_path / "ledger_export.json"
+        result_path = self.service.export_chain_to_json(export_file)
+
+        self.assertTrue(result_path.is_file())
+        with open(result_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        self.assertEqual(data["app"], "CRYPTOSAFE")
+        self.assertEqual(data["total_blocks"], 2)
+        self.assertTrue(data["chain_integrity"]["is_valid"])
+        self.assertEqual(len(data["blocks"]), 2)
+        self.assertEqual(data["blocks"][0]["event_type"], "GENESIS")
+        self.assertEqual(data["blocks"][1]["event_type"], "CONTRACT_CREATED")
+        self.assertEqual(data["blocks"][1]["payload"]["title"], "Test Contract")
+
+    def test_export_chain_to_csv(self):
+        """Verify export_chain_to_csv produces a valid CSV file with correct headers."""
+        import csv
+        self.service.ensure_genesis_block()
+        h1 = hashlib.sha256(b"DocCSV").hexdigest()
+        self.service.append_block("NOTE_CREATED", "note:5", h1, {"note": "Secret"})
+
+        export_file = self.temp_path / "ledger_export.csv"
+        result_path = self.service.export_chain_to_csv(export_file)
+
+        self.assertTrue(result_path.is_file())
+        with open(result_path, "r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            rows = list(reader)
+
+        self.assertEqual(len(rows), 3)  # header + 2 blocks
+        self.assertEqual(rows[0][0], "block_index")
+        self.assertEqual(rows[0][2], "event_type")
+        self.assertEqual(rows[1][2], "GENESIS")
+        self.assertEqual(rows[2][2], "NOTE_CREATED")
+
 
 if __name__ == "__main__":
     unittest.main()

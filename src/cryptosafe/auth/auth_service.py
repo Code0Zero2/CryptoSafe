@@ -1,5 +1,7 @@
 """Authentication application service orchestrating user registration and verification."""
 
+from __future__ import annotations
+
 import re
 import logging
 from typing import Callable
@@ -105,9 +107,14 @@ class AuthService:
             # Factor 3: Face Recognition Biometrics (if enrolled)
             if self._face_service and self._face_service.has_active_profile(user.id):
                 target_image = face_image
+                liveness_frames = None
                 if target_image is None and face_capture_callback is not None:
                     try:
-                        target_image = face_capture_callback()
+                        captured_result = face_capture_callback()
+                        if isinstance(captured_result, tuple):
+                            target_image, liveness_frames = captured_result
+                        else:
+                            target_image = captured_result
                     except AuthenticationCancelledError:
                         raise
                     except Exception as err:
@@ -120,7 +127,9 @@ class AuthService:
                 if target_image is None:
                     target_image = self._face_service.capture_camera_frame()
 
-                self._face_service.verify_face(user.id, target_image, password=password)
+                self._face_service.verify_face(
+                    user.id, target_image, password=password, liveness_frames=liveness_frames
+                )
                 logger.info("MFA Step 3 (Face Biometrics) passed for user: %s", user.username)
 
             # All active factors verified -> clear failures and establish session

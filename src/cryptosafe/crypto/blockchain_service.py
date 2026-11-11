@@ -1,5 +1,8 @@
 """Local SHA-256 Blockchain / Hash Chain service for asset integrity tracking."""
 
+from __future__ import annotations
+
+import csv
 import hashlib
 import json
 import logging
@@ -440,3 +443,84 @@ class BlockchainService:
 
         # Return latest matching block
         return True, matching_blocks[-1], chain_result
+
+    def export_chain_to_json(self, destination_path: str | Path) -> Path:
+        """Export the complete blockchain ledger and its cryptographic verification report to a JSON file."""
+        dst = Path(destination_path).resolve()
+        dst.parent.mkdir(parents=True, exist_ok=True)
+
+        chain_result = self.verify_chain_integrity()
+        blocks = self._repository.get_all_blocks()
+
+        export_data = {
+            "app": "CRYPTOSAFE",
+            "ledger_version": 1,
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "total_blocks": len(blocks),
+            "chain_integrity": {
+                "is_valid": chain_result.is_valid,
+                "error_detail": chain_result.error_detail,
+                "tampered_index": chain_result.tampered_index,
+            },
+            "blocks": [],
+        }
+
+        for b in blocks:
+            try:
+                parsed_payload = json.loads(b.payload_json) if b.payload_json else {}
+            except Exception:
+                parsed_payload = b.payload_json
+
+            export_data["blocks"].append({
+                "block_index": b.block_index,
+                "timestamp": b.timestamp,
+                "event_type": b.event_type,
+                "asset_id": b.asset_id,
+                "asset_hash": b.asset_hash,
+                "payload": parsed_payload,
+                "previous_hash": b.previous_hash,
+                "block_hash": b.block_hash,
+                "created_by": b.created_by,
+            })
+
+        with open(dst, "w", encoding="utf-8") as f:
+            json.dump(export_data, f, indent=2, ensure_ascii=False)
+
+        logger.info("Exported %d blockchain blocks to JSON: %s", len(blocks), dst)
+        return dst
+
+    def export_chain_to_csv(self, destination_path: str | Path) -> Path:
+        """Export the blockchain blocks to a standard CSV file for external tabular auditing."""
+        dst = Path(destination_path).resolve()
+        dst.parent.mkdir(parents=True, exist_ok=True)
+
+        blocks = self._repository.get_all_blocks()
+
+        with open(dst, "w", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                "block_index",
+                "timestamp",
+                "event_type",
+                "asset_id",
+                "asset_hash",
+                "previous_hash",
+                "block_hash",
+                "created_by",
+                "payload_json",
+            ])
+            for b in blocks:
+                writer.writerow([
+                    b.block_index,
+                    b.timestamp,
+                    b.event_type,
+                    b.asset_id,
+                    b.asset_hash,
+                    b.previous_hash,
+                    b.block_hash,
+                    b.created_by if b.created_by is not None else "",
+                    b.payload_json,
+                ])
+
+        logger.info("Exported %d blockchain blocks to CSV: %s", len(blocks), dst)
+        return dst

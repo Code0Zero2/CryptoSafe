@@ -1,5 +1,7 @@
 """Interactive camera viewfinder dialog for face biometric enrollment and verification (Tahap 2)."""
 
+from __future__ import annotations
+
 import logging
 import time
 from typing import Callable
@@ -189,6 +191,8 @@ class FaceCaptureDialog(QDialog):
         self._camera_index = camera_index
         self._custom_thread = camera_thread
         self.captured_frame: np.ndarray | None = None
+        self.captured_liveness_frames: list[np.ndarray] = []
+        self._recent_frames: list[np.ndarray] = []
         self._last_raw_frame: np.ndarray | None = None
         self._last_face_frame: np.ndarray | None = None
         self._last_face_rect: tuple[int, int, int, int] | None = None
@@ -245,6 +249,15 @@ class FaceCaptureDialog(QDialog):
             "padding: 6px; background-color: #FEF3C7; border: 1px solid #FCD34D; border-radius: 4px;"
         )
         main_layout.addWidget(self.status_label)
+
+        # Liveness Indicator Pill
+        self.liveness_label = QLabel("🛡 Anti-Spoofing: Aktif (Verifikasi Keaslian & Gerak Wajah)")
+        self.liveness_label.setAlignment(Qt.AlignCenter)
+        self.liveness_label.setStyleSheet(
+            "font-size: 11px; font-weight: 500; color: #0F766E; "
+            "padding: 3px; background-color: #CCFBF1; border-radius: 3px;"
+        )
+        main_layout.addWidget(self.liveness_label)
 
         # Action Buttons
         btn_layout = QHBoxLayout()
@@ -322,6 +335,9 @@ class FaceCaptureDialog(QDialog):
         self._last_face_rect = face_rect
         if face_rect is not None:
             self._last_face_frame = frame.copy()
+            self._recent_frames.append(frame.copy())
+            if len(self._recent_frames) > 10:
+                self._recent_frames.pop(0)
         self.capture_btn.setEnabled(True)
 
         display_frame = frame.copy()
@@ -405,6 +421,7 @@ class FaceCaptureDialog(QDialog):
         chosen_frame = self._last_face_frame if self._last_face_frame is not None else self._last_raw_frame
         if chosen_frame is not None:
             self.captured_frame = chosen_frame.copy()
+            self.captured_liveness_frames = list(self._recent_frames)
             self.accept()
         else:
             QMessageBox.warning(self, "Peringatan", "Frame gambar belum tersedia.")
