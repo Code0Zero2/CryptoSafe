@@ -62,7 +62,7 @@ CryptoSafe is designed for organizations and students studying applied cryptogra
 ### 2. Classical & Modern Cryptography Suite
 - **Vigenère Cipher (Educational Layer):** Full alphabet transposition cipher with configurable keyword, demonstrating historical polyalphabetic substitution.
 - **Text Crypto (Vigenère + AES-256-GCM):** Dual-layer confidentiality: plaintext is transformed through Vigenère, then sealed in an authenticated AES-256-GCM envelope using PBKDF2-HMAC-SHA256 key derivation (600,000 iterations, 16-byte random salt).
-- **Steganography Studio:** 1-bit Least Significant Bit (LSB) encoding in lossless PNG images. Secret messages are encrypted with AES-256-GCM before embedding, protected by a 4-byte length prefix and magic header to prevent noise extraction.
+- **Steganography Studio:** 1-bit Least Significant Bit (LSB) encoding in lossless PNG images. Secret messages are encrypted with AES-256-GCM before embedding, protected by a 4-byte length prefix and magic header `CSLSB\x01` to prevent noise extraction.
 
 ### 3. Secure File Vault
 - **ChaCha20-Poly1305 Encryption:** Authenticated stream cipher encryption for arbitrary documents and attachments.
@@ -194,12 +194,18 @@ CRYPTOSAFE/
 |       |   |-- session_manager.py      # Thread-safe user session management
 |       |   `-- usb_token_service.py    # USB detection and HMAC challenge-response
 |       |-- crypto/             # Core cryptographic transformation modules
-|       |   |-- file_crypto_service.py  # ChaCha20-Poly1305 file vault encryption
-|       |   |-- stego_service.py        # PNG LSB steganography + AES-256-GCM
-|       |   `-- text_crypto_service.py  # Vigenere + PBKDF2 + AES-256-GCM
+|       |   |-- aes_gcm.py              # AES-256-GCM authenticated cipher
+|       |   |-- chacha20.py             # ChaCha20-Poly1305 authenticated stream cipher
+|       |   |-- file_crypto_service.py  # ChaCha20-Poly1305 chunked file vault encryption
+|       |   |-- file_envelope.py        # 48-byte file envelope & chunk framing
+|       |   |-- key_manager.py          # PBKDF2-HMAC-SHA256 key policies
+|       |   |-- steganography_service.py# PNG LSB steganography + AES-256-GCM
+|       |   |-- text_crypto_service.py  # Vigenere + PBKDF2 + AES-256-GCM
+|       |   |-- text_envelope.py        # Versioned JSON text envelope
+|       |   |-- vigenere.py             # Classical educational substitution cipher
+|       |   `-- blockchain_service.py   # SHA-256 hash chain, verifier & exporter
 |       |-- database/           # Persistence, services, and repositories
 |       |   |-- connection.py               # SQLite connection pool and SAVEPOINT context
-|       |   |-- blockchain_service.py       # SHA-256 hash chain and validation service
 |       |   |-- blockchain_repository.py    # Blockchain block queries and appends
 |       |   |-- contract_service.py         # Contract coordinator with blockchain integration
 |       |   |-- contract_repository.py      # Contracts table SQL operations
@@ -207,17 +213,22 @@ CRYPTOSAFE/
 |       |   |-- contract_file_repository.py # File metadata repository
 |       |   |-- encrypted_message_service.py# Encrypted notes coordinator with blockchain
 |       |   |-- encrypted_message_repository.py # Notes repository
-|       |   `-- user_repository.py          # User accounts repository
+|       |   |-- user_repository.py          # User accounts repository
+|       |   |-- usb_repository.py           # USB credential credentials repository
+|       |   |-- face_repository.py          # Biometric face profile repository
+|       |   `-- schema.py                   # Versioned SQLite migrations (v1-v5)
 |       `-- gui/                # PySide6 graphical user interface
-|           |-- main_window.py          # Main application shell with tabbed navigation
-|           |-- login_dialog.py         # Multi-step authentication dialog
-|           |-- register_dialog.py      # User registration with optional MFA enrollment
-|           |-- face_capture_dialog.py  # Live camera feed and face capture dialog
+|           |-- main_window.py          # Main application shell with QStackedWidget
+|           |-- login_page.py           # User authentication page
+|           |-- register_page.py        # User registration page
+|           |-- dashboard_page.py       # Central hub, feature cards & MFA controls
 |           |-- contract_page.py        # Contract management, notes, and attachments UI
-|           |-- vault_page.py           # Secure file vault explorer and inspector UI
-|           |-- crypto_tools_page.py    # Interactive Vigenere and AES text crypto UI
-|           |-- steganography_page.py   # LSB image embedding and extraction UI
-|           `-- audit_page.py           # Blockchain block explorer and integrity verifier
+|           |-- file_page.py            # Standalone ChaCha20 file encryption UI
+|           |-- text_page.py            # Super-encryption Vigenere + AES-GCM text UI
+|           |-- stego_page.py           # PNG LSB image embedding and extraction UI
+|           |-- audit_dialog.py         # Blockchain block explorer and integrity verifier
+|           |-- face_capture_dialog.py  # Live camera feed, face capture & liveness check
+|           `-- usb_dialog.py           # USB dongle enrollment dialog
 `-- tests/
     |-- unit/                   # Unit test suite covering all modules and services
     `-- integration/            # End-to-end integration tests (GUI, Blockchain, MFA)
