@@ -38,6 +38,41 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
     height: 0px;
 }
 
+QScrollBar:horizontal {
+    border: none;
+    background: #F1F5F9;
+    height: 8px;
+    margin: 0;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:horizontal {
+    background: #CBD5E1;
+    min-width: 24px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: #94A3B8;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal,
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: none;
+    border: none;
+    width: 0px;
+}
+
+/* Tooltip */
+QToolTip {
+    background-color: #0F172A;
+    color: #F8FAFC;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
 /* Input Fields */
 QLineEdit, QTextEdit, QPlainTextEdit {
     background-color: #FFFFFF;
