@@ -1,6 +1,7 @@
-# Python
+# Python environment & cache
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
@@ -9,7 +10,7 @@ venv/
 .venv/
 env/
 
-# Secrets and local configuration
+# Secrets, local tokens, and configurations
 .env
 .env.*
 !.env.example
@@ -18,30 +19,37 @@ env/
 *.secret
 secrets/
 token_data/
+token.key
+
+# Logs and runtime diagnostics
 logs/
 *.log
 
-# Local databases and user data
+# Databases and SQLite WAL/SHM artifacts
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
+data/
 storage/
 user_data/
 biometric_data/
 
-# Generated encrypted files and test artifacts
+# Secure vault and encrypted file artifacts
 *.enc
 *.cryptosafe
+data/vault/
+
+# Test output, distributions, and build artifacts
 test_output/
 dist/
 build/
 
-# IDE / OS
+# IDE and OS metadata
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
-
-logs/
-*.log
-data/
+desktop.ini
