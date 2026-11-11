@@ -29,20 +29,21 @@ class TextPage(QWidget):
 
     def _setup_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(24, 24, 24, 24)
-        main_layout.setSpacing(16)
+        main_layout.setContentsMargins(32, 28, 32, 28)
+        main_layout.setSpacing(18)
 
         # Header bar
         header_layout = QHBoxLayout()
         title_box = QVBoxLayout()
+        title_box.setSpacing(4)
         title_lbl = QLabel("Super-Enkripsi Teks")
-        title_lbl.setStyleSheet("font-size: 20px; font-weight: bold; color: #1E293B;")
+        title_lbl.setStyleSheet("font-size: 24px; font-weight: 700; color: #0F172A;")
         title_box.addWidget(title_lbl)
 
         desc_lbl = QLabel(
-            "Alur Kriptografi: Plaintext → Vigenère Cipher (Klasik) → AES-256-GCM (Modern AEAD) → Structured Envelope"
+            "Perlindungan pesan bertingkat menggunakan sandi substitusi Vigenère dan cipher AEAD modern AES-256-GCM."
         )
-        desc_lbl.setStyleSheet("font-size: 12px; color: #64748B;")
+        desc_lbl.setStyleSheet("font-size: 13px; color: #64748B; font-weight: 500;")
         title_box.addWidget(desc_lbl)
         header_layout.addLayout(title_box)
 
@@ -50,7 +51,13 @@ class TextPage(QWidget):
 
         self.back_button = QPushButton("← Kembali ke Dashboard")
         self.back_button.setStyleSheet(
-            "background-color: #4B5563; color: white; padding: 6px 14px; font-weight: bold; border-radius: 4px; font-size: 12px;"
+            "QPushButton {"
+            "   background-color: #FFFFFF; color: #475569; border: 1.5px solid #CBD5E1;"
+            "   padding: 7px 16px; font-weight: 600; border-radius: 6px; font-size: 12px;"
+            "}"
+            "QPushButton:hover {"
+            "   background-color: #F1F5F9; color: #0F172A;"
+            "}"
         )
         self.back_button.clicked.connect(self.back_to_dashboard_requested.emit)
         header_layout.addWidget(self.back_button)
@@ -83,15 +90,18 @@ class TextPage(QWidget):
 
         # Automatic Key Generator Toolbar
         gen_toolbar = QHBoxLayout()
-        self.generate_key_button = QPushButton("Generate Key")
+        self.generate_key_button = QPushButton("Buat Kunci Otomatis (Generate)")
         self.generate_key_button.setStyleSheet(
-            "background-color: #4F46E5; color: white; padding: 6px 14px; font-weight: bold; border-radius: 4px; font-size: 12px;"
+            "QPushButton {"
+            "   background-color: #4F46E5; color: white; padding: 7px 16px; font-weight: 600; border-radius: 6px; font-size: 12px; border: none;"
+            "}"
+            "QPushButton:hover { background-color: #4338CA; }"
         )
         self.generate_key_button.clicked.connect(self._generate_keys_clicked)
         gen_toolbar.addWidget(self.generate_key_button)
 
         key_warning_lbl = QLabel(
-            "⚠️ PERHATIAN: Simpan kedua kunci secara manual! Sistem tidak menyimpan kunci ke database atau log."
+            "⚠️ Simpan kedua kunci secara mandiri. Demi keamanan zero-knowledge, sistem tidak menyimpan kunci."
         )
         key_warning_lbl.setStyleSheet("color: #B45309; font-size: 11px; font-weight: 500;")
         gen_toolbar.addWidget(key_warning_lbl)
@@ -108,8 +118,10 @@ class TextPage(QWidget):
         self.enc_vig_key_input.setPlaceholderText("Contoh: RAHASIA")
         vig_input_row.addWidget(self.enc_vig_key_input)
 
-        self.copy_vig_key_button = QPushButton("Salin Kunci")
-        self.copy_vig_key_button.setStyleSheet("padding: 4px 8px; font-size: 11px;")
+        self.copy_vig_key_button = QPushButton("Salin")
+        self.copy_vig_key_button.setStyleSheet(
+            "QPushButton { background-color: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; padding: 6px 12px; font-weight: 600; border-radius: 5px; font-size: 11px; } QPushButton:hover { background-color: #E2E8F0; }"
+        )
         self.copy_vig_key_button.clicked.connect(self._copy_vig_key_to_clipboard)
         vig_input_row.addWidget(self.copy_vig_key_button)
         vig_box.addLayout(vig_input_row)
@@ -123,8 +135,10 @@ class TextPage(QWidget):
         self.enc_aes_key_input.setPlaceholderText("Passphrase atau 64-karakter hex key")
         aes_input_row.addWidget(self.enc_aes_key_input)
 
-        self.copy_aes_key_button = QPushButton("Salin Kunci")
-        self.copy_aes_key_button.setStyleSheet("padding: 4px 8px; font-size: 11px;")
+        self.copy_aes_key_button = QPushButton("Salin")
+        self.copy_aes_key_button.setStyleSheet(
+            "QPushButton { background-color: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; padding: 6px 12px; font-weight: 600; border-radius: 5px; font-size: 11px; } QPushButton:hover { background-color: #E2E8F0; }"
+        )
         self.copy_aes_key_button.clicked.connect(self._copy_aes_key_to_clipboard)
         aes_input_row.addWidget(self.copy_aes_key_button)
         aes_box.addLayout(aes_input_row)
@@ -135,7 +149,10 @@ class TextPage(QWidget):
         # Action button
         self.encrypt_button = QPushButton("Jalankan Super-Enkripsi")
         self.encrypt_button.setStyleSheet(
-            "background-color: #2563EB; color: white; padding: 8px; font-weight: bold; border-radius: 4px;"
+            "QPushButton {"
+            "   background-color: #4F46E5; color: white; padding: 9px; font-weight: 600; border-radius: 6px; font-size: 13px; border: none;"
+            "}"
+            "QPushButton:hover { background-color: #4338CA; }"
         )
         self.encrypt_button.clicked.connect(self._handle_encrypt)
         layout.addWidget(self.encrypt_button)
@@ -147,7 +164,9 @@ class TextPage(QWidget):
         layout.addWidget(self.enc_result_output)
 
         copy_btn = QPushButton("Salin Ciphertext ke Clipboard")
-        copy_btn.setStyleSheet("padding: 4px; font-size: 11px;")
+        copy_btn.setStyleSheet(
+            "QPushButton { background-color: #F8FAFC; color: #475569; border: 1px solid #CBD5E1; padding: 6px 12px; font-weight: 600; border-radius: 5px; font-size: 11px; } QPushButton:hover { background-color: #F1F5F9; }"
+        )
         copy_btn.clicked.connect(self._copy_encrypted_to_clipboard)
         layout.addWidget(copy_btn)
 
@@ -187,7 +206,10 @@ class TextPage(QWidget):
         # Action button
         self.decrypt_button = QPushButton("Jalankan Super-Dekripsi")
         self.decrypt_button.setStyleSheet(
-            "background-color: #059669; color: white; padding: 8px; font-weight: bold; border-radius: 4px;"
+            "QPushButton {"
+            "   background-color: #059669; color: white; padding: 9px; font-weight: 600; border-radius: 6px; font-size: 13px; border: none;"
+            "}"
+            "QPushButton:hover { background-color: #047857; }"
         )
         self.decrypt_button.clicked.connect(self._handle_decrypt)
         layout.addWidget(self.decrypt_button)

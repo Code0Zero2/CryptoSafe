@@ -6,6 +6,7 @@ from cryptosafe import __version__
 from cryptosafe.config import APP_NAME, APP_MODE
 from cryptosafe.common.logging_config import setup_logging
 from cryptosafe.gui.main_window import MainWindow
+from cryptosafe.gui.styles import GLOBAL_STYLESHEET
 from cryptosafe.database.connection import get_connection
 from cryptosafe.database.schema import init_db
 from cryptosafe.database.user_repository import UserRepository
@@ -30,6 +31,7 @@ def create_app(
 
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(__version__)
+    app.setStyleSheet(GLOBAL_STYLESHEET)
 
     if auth_service is None or usb_service is None or face_service is None:
         conn = get_connection()

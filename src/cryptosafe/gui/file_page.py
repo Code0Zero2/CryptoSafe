@@ -29,20 +29,21 @@ class FilePage(QWidget):
 
     def _setup_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(24, 24, 24, 24)
-        main_layout.setSpacing(16)
+        main_layout.setContentsMargins(32, 28, 32, 28)
+        main_layout.setSpacing(18)
 
         # Header bar
         header_layout = QHBoxLayout()
         title_box = QVBoxLayout()
-        title_lbl = QLabel("Enkripsi Berkas (ChaCha20-Poly1305)")
-        title_lbl.setStyleSheet("font-size: 20px; font-weight: bold; color: #1E293B;")
+        title_box.setSpacing(4)
+        title_lbl = QLabel("Enkripsi Berkas Dokumen")
+        title_lbl.setStyleSheet("font-size: 24px; font-weight: 700; color: #0F172A;")
         title_box.addWidget(title_lbl)
 
         desc_lbl = QLabel(
-            "Enkripsi berkas biner/teks dengan chunked AEAD, nonce unik per chunk, dan integritas lengkap."
+            "Proteksi berkas biner dan teks performa tinggi menggunakan ChaCha20-Poly1305 dengan integritas terverifikasi."
         )
-        desc_lbl.setStyleSheet("font-size: 12px; color: #64748B;")
+        desc_lbl.setStyleSheet("font-size: 13px; color: #64748B; font-weight: 500;")
         title_box.addWidget(desc_lbl)
         header_layout.addLayout(title_box)
 
@@ -50,7 +51,13 @@ class FilePage(QWidget):
 
         self.back_button = QPushButton("← Kembali ke Dashboard")
         self.back_button.setStyleSheet(
-            "background-color: #4B5563; color: white; padding: 6px 14px; font-weight: bold; border-radius: 4px; font-size: 12px;"
+            "QPushButton {"
+            "   background-color: #FFFFFF; color: #475569; border: 1.5px solid #CBD5E1;"
+            "   padding: 7px 16px; font-weight: 600; border-radius: 6px; font-size: 12px;"
+            "}"
+            "QPushButton:hover {"
+            "   background-color: #F1F5F9; color: #0F172A;"
+            "}"
         )
         self.back_button.clicked.connect(self.back_to_dashboard_requested.emit)
         header_layout.addWidget(self.back_button)
@@ -73,7 +80,12 @@ class FilePage(QWidget):
     def _create_encrypt_tab(self) -> QWidget:
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(12)
+        layout.setSpacing(14)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        btn_browse_style = (
+            "QPushButton { background-color: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; padding: 7px 14px; font-weight: 600; border-radius: 5px; font-size: 12px; } QPushButton:hover { background-color: #E2E8F0; }"
+        )
 
         # Source File
         layout.addWidget(QLabel("1. Berkas Asli yang Ingin Dienkripsi:"))
@@ -83,6 +95,7 @@ class FilePage(QWidget):
         src_row.addWidget(self.enc_source_input)
 
         self.btn_browse_enc_source = QPushButton("Pilih Berkas...")
+        self.btn_browse_enc_source.setStyleSheet(btn_browse_style)
         self.btn_browse_enc_source.clicked.connect(self._browse_enc_source)
         src_row.addWidget(self.btn_browse_enc_source)
         layout.addLayout(src_row)
@@ -95,6 +108,7 @@ class FilePage(QWidget):
         dst_row.addWidget(self.enc_dest_input)
 
         self.btn_browse_enc_dest = QPushButton("Pilih Lokasi...")
+        self.btn_browse_enc_dest.setStyleSheet(btn_browse_style)
         self.btn_browse_enc_dest.clicked.connect(self._browse_enc_dest)
         dst_row.addWidget(self.btn_browse_enc_dest)
         layout.addLayout(dst_row)
@@ -107,6 +121,7 @@ class FilePage(QWidget):
         key_row.addWidget(self.enc_key_input)
 
         self.btn_gen_key = QPushButton("Buat Kunci Acak")
+        self.btn_gen_key.setStyleSheet(btn_browse_style)
         self.btn_gen_key.clicked.connect(self._generate_random_key_clicked)
         key_row.addWidget(self.btn_gen_key)
         layout.addLayout(key_row)
@@ -114,7 +129,10 @@ class FilePage(QWidget):
         # Action Button
         self.encrypt_button = QPushButton("Jalankan Enkripsi Berkas")
         self.encrypt_button.setStyleSheet(
-            "background-color: #2563EB; color: white; padding: 10px; font-weight: bold; border-radius: 4px; font-size: 13px;"
+            "QPushButton {"
+            "   background-color: #4F46E5; color: white; padding: 10px; font-weight: 600; border-radius: 6px; font-size: 13px; border: none;"
+            "}"
+            "QPushButton:hover { background-color: #4338CA; }"
         )
         self.encrypt_button.clicked.connect(self._handle_encrypt)
         layout.addWidget(self.encrypt_button)
@@ -125,7 +143,12 @@ class FilePage(QWidget):
     def _create_decrypt_tab(self) -> QWidget:
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(12)
+        layout.setSpacing(14)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        btn_browse_style = (
+            "QPushButton { background-color: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; padding: 7px 14px; font-weight: 600; border-radius: 5px; font-size: 12px; } QPushButton:hover { background-color: #E2E8F0; }"
+        )
 
         # Source File
         layout.addWidget(QLabel("1. Berkas Terenkripsi (.enc):"))
@@ -135,6 +158,7 @@ class FilePage(QWidget):
         src_row.addWidget(self.dec_source_input)
 
         self.btn_browse_dec_source = QPushButton("Pilih Berkas...")
+        self.btn_browse_dec_source.setStyleSheet(btn_browse_style)
         self.btn_browse_dec_source.clicked.connect(self._browse_dec_source)
         src_row.addWidget(self.btn_browse_dec_source)
         layout.addLayout(src_row)
@@ -147,6 +171,7 @@ class FilePage(QWidget):
         dst_row.addWidget(self.dec_dest_input)
 
         self.btn_browse_dec_dest = QPushButton("Pilih Lokasi...")
+        self.btn_browse_dec_dest.setStyleSheet(btn_browse_style)
         self.btn_browse_dec_dest.clicked.connect(self._browse_dec_dest)
         dst_row.addWidget(self.btn_browse_dec_dest)
         layout.addLayout(dst_row)
@@ -160,9 +185,13 @@ class FilePage(QWidget):
         # Action Button
         self.decrypt_button = QPushButton("Jalankan Dekripsi Berkas")
         self.decrypt_button.setStyleSheet(
-            "background-color: #059669; color: white; padding: 10px; font-weight: bold; border-radius: 4px; font-size: 13px;"
+            "QPushButton {"
+            "   background-color: #059669; color: white; padding: 10px; font-weight: 600; border-radius: 6px; font-size: 13px; border: none;"
+            "}"
+            "QPushButton:hover { background-color: #047857; }"
         )
         self.decrypt_button.clicked.connect(self._handle_decrypt)
+        layout.addWidget(self.decrypt_button)
         layout.addWidget(self.decrypt_button)
 
         layout.addStretch()
