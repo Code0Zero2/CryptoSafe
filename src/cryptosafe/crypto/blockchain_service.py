@@ -12,6 +12,7 @@ from pathlib import Path
 
 from cryptosafe.common.errors import CryptoOperationError, ValidationError
 from cryptosafe.database.blockchain_repository import Block, BlockchainRepository
+from cryptosafe.database.connection import transaction
 
 logger = logging.getLogger("cryptosafe.crypto.blockchain")
 
@@ -84,7 +85,16 @@ class BlockchainService:
     def repository(self) -> BlockchainRepository:
         return self._repository
 
-    def ensure_genesis_block(self) -> Block:
+    @property
+    def conn(self) -> sqlite3.Connection:
+        """Return the underlying SQLite database connection."""
+        return self._repository.conn
+
+    def transaction(self):
+        """Provide an atomic transaction context on the underlying connection."""
+        return transaction(self._repository.conn)
+
+    def ensure_genesis_block(self, external_transaction: bool = False) -> Block:
         """Create genesis block if chain is empty, or return existing genesis block."""
         with self._lock:
             max_attempts = 5
@@ -118,6 +128,7 @@ class BlockchainService:
                         previous_hash=GENESIS_PREVIOUS_HASH,
                         block_hash=block_hash,
                         created_by=None,
+                        external_transaction=external_transaction,
                     )
                     logger.info("Initialized Genesis block with hash %s", block_hash)
                     return genesis
@@ -149,6 +160,7 @@ class BlockchainService:
         asset_hash: str,
         payload: dict | str,
         created_by: int | None = None,
+        external_transaction: bool = False,
     ) -> Block:
         """Append a new verified block to the blockchain atomically."""
         if not event_type or not isinstance(event_type, str) or not event_type.strip():
@@ -195,7 +207,7 @@ class BlockchainService:
 
         with self._lock:
             # Ensure genesis block exists first
-            self.ensure_genesis_block()
+            self.ensure_genesis_block(external_transaction=external_transaction)
 
             # Retry loop in case of multi-process concurrent index contention or locked DB
             max_attempts = 5
@@ -230,6 +242,7 @@ class BlockchainService:
                         previous_hash=previous_hash,
                         block_hash=block_hash,
                         created_by=created_by,
+                        external_transaction=external_transaction,
                     )
                     logger.info(
                         "Appended block %d (event=%s, asset=%s) with hash %s",

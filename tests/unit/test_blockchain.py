@@ -10,7 +10,7 @@ src_dir = Path(__file__).resolve().parent.parent.parent / "src"
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
-from cryptosafe.database.connection import get_connection
+from cryptosafe.database.connection import get_connection, transaction
 from cryptosafe.database.schema import (
     CURRENT_SCHEMA_VERSION,
     init_db,
@@ -422,7 +422,7 @@ class TestBlockchainService(unittest.TestCase):
 import sys
 sys.path.insert(0, r"{src_dir}")
 import hashlib
-from cryptosafe.database.connection import get_connection
+from cryptosafe.database.connection import get_connection, transaction
 from cryptosafe.database.blockchain_repository import BlockchainRepository
 from cryptosafe.crypto.blockchain_service import BlockchainService
 
@@ -457,6 +457,72 @@ conn.close()
         res = verify_svc.verify_chain_integrity()
         self.assertTrue(res.is_valid)
         self.assertEqual(res.total_blocks, 7)
+        verify_conn.close()
+
+    def test_two_python_processes_append_in_external_transaction_concurrently(self):
+        """Verify two distinct Python processes can append blocks concurrently inside external transactions."""
+        import subprocess
+        proc_db = self.temp_path / "multiprocess_ext_tx.db"
+        init_conn = get_connection(proc_db)
+        init_db(init_conn)
+        init_conn.execute("CREATE TABLE proc_ext_tx (tag TEXT, seq INT)")
+        init_conn.commit()
+        init_conn.close()
+
+        worker_script = f"""
+import sys
+sys.path.insert(0, r"{src_dir}")
+import hashlib
+import time
+from cryptosafe.database.connection import get_connection, transaction
+from cryptosafe.database.blockchain_repository import BlockchainRepository
+from cryptosafe.crypto.blockchain_service import BlockchainService
+
+tag = sys.argv[1]
+conn = get_connection(r"{proc_db}")
+repo = BlockchainRepository(conn)
+svc = BlockchainService(repo)
+
+for i in range(3):
+    done = False
+    for attempt in range(10):
+        try:
+            with transaction(conn):
+                conn.execute("INSERT INTO proc_ext_tx VALUES (?, ?)", (tag, i))
+                h = hashlib.sha256(f"{{tag}}-{{i}}".encode()).hexdigest()
+                svc.append_block("EXT_TX_EVENT", f"asset:{{tag}}:{{i}}", h, {{"worker": tag, "seq": i}})
+            done = True
+            break
+        except Exception:
+            time.sleep(0.04 * (attempt + 1))
+    if not done:
+        sys.exit(1)
+conn.close()
+"""
+        script_file = self.temp_path / "ext_tx_worker.py"
+        script_file.write_text(worker_script, encoding="utf-8")
+
+        p1 = subprocess.Popen([sys.executable, str(script_file), "procA"])
+        p2 = subprocess.Popen([sys.executable, str(script_file), "procB"])
+
+        p1.wait(timeout=20)
+        p2.wait(timeout=20)
+
+        self.assertEqual(p1.returncode, 0)
+        self.assertEqual(p2.returncode, 0)
+
+        verify_conn = get_connection(proc_db)
+        verify_repo = BlockchainRepository(verify_conn)
+        verify_svc = BlockchainService(verify_repo)
+
+        # Total: 1 genesis + 3 from procA + 3 from procB = 7 blocks
+        self.assertEqual(verify_repo.get_blocks_count(), 7)
+        res = verify_svc.verify_chain_integrity()
+        self.assertTrue(res.is_valid)
+        self.assertEqual(res.total_blocks, 7)
+
+        rows = verify_conn.execute("SELECT * FROM proc_ext_tx").fetchall()
+        self.assertEqual(len(rows), 6)
         verify_conn.close()
 
     def test_retry_on_operational_error_database_locked(self):
@@ -553,6 +619,165 @@ conn.close()
         genesis = b_service.ensure_genesis_block()
         self.assertEqual(genesis.block_index, 0)
         mig_conn.close()
+
+    def test_append_block_normal_persists(self):
+        """Verify standalone append_block works normally and persists block to database."""
+        h = hashlib.sha256(b"StandaloneContent").hexdigest()
+        block = self.service.append_block("STANDALONE_EVENT", "asset:normal", h, {"key": "val"})
+        self.assertIsNotNone(block)
+        self.assertEqual(block.asset_id, "asset:normal")
+        found = self.repo.get_by_index(block.block_index)
+        self.assertIsNotNone(found)
+        self.assertEqual(found.block_hash, block.block_hash)
+
+    def test_external_transaction_does_not_commit_prematurely(self):
+        """Verify append_block inside an external transaction does not commit until transaction exits."""
+        file_db = self.temp_path / "shared_tx.db"
+        c1 = get_connection(file_db)
+        init_db(c1)
+        c1.execute("CREATE TABLE tx_test (id INT, name TEXT)")
+        c1.commit()
+
+        u_repo = UserRepository(c1)
+        user = u_repo.create_user("bob", "hash123")
+        c1.commit()
+
+        repo1 = BlockchainRepository(c1)
+        service1 = BlockchainService(repo1)
+        service1.ensure_genesis_block()
+        c1.commit()
+
+        c2 = get_connection(file_db)
+        repo2 = BlockchainRepository(c2)
+
+        # Before external transaction: only genesis block (count=1)
+        self.assertEqual(repo2.get_blocks_count(), 1)
+
+        h = hashlib.sha256(b"TxContent").hexdigest()
+
+        with transaction(c1):
+            c1.execute("INSERT INTO tx_test VALUES (1, 'item1')")
+            service1.append_block("TX_EVENT", "asset:tx", h, {"item": 1}, created_by=user.id)
+
+            # c2 reads while c1 transaction is STILL ACTIVE: must NOT see uncommitted changes!
+            c2_rows = c2.execute("SELECT * FROM tx_test").fetchall()
+            self.assertEqual(len(c2_rows), 0, "Uncommitted domain record leaked to other connection!")
+            self.assertEqual(repo2.get_blocks_count(), 1, "Uncommitted blockchain block leaked to other connection!")
+
+        # After c1 transaction commits: c2 must now see the changes
+        c2_rows_after = c2.execute("SELECT * FROM tx_test").fetchall()
+        self.assertEqual(len(c2_rows_after), 1)
+        self.assertEqual(c2_rows_after[0]["name"], "item1")
+        self.assertEqual(repo2.get_blocks_count(), 2)
+
+        c1.close()
+        c2.close()
+
+    def test_external_transaction_rollback_cancels_block(self):
+        """Verify that rolling back an external transaction rolls back both domain changes and appended blocks."""
+        self.conn.execute("CREATE TABLE rollback_test (id INT, val TEXT)")
+        self.service.ensure_genesis_block()
+        initial_count = self.repo.get_blocks_count()
+
+        h = hashlib.sha256(b"RollbackContent").hexdigest()
+
+        try:
+            with transaction(self.conn):
+                self.conn.execute("INSERT INTO rollback_test VALUES (1, 'will_rollback')")
+                self.service.append_block("ROLLBACK_EVENT", "asset:rb", h, {"test": "rb"})
+                raise RuntimeError("Simulated transaction failure")
+        except RuntimeError:
+            pass
+
+        # Both domain insert and block must be rolled back
+        rows = self.conn.execute("SELECT * FROM rollback_test").fetchall()
+        self.assertEqual(len(rows), 0)
+        self.assertEqual(self.repo.get_blocks_count(), initial_count)
+        self.assertIsNone(self.repo.get_by_index(initial_count))
+
+    def test_external_transaction_commit_persists_block(self):
+        """Verify that successfully committing an external transaction persists domain changes and blocks."""
+        self.conn.execute("CREATE TABLE commit_test (id INT, val TEXT)")
+        self.service.ensure_genesis_block()
+        initial_count = self.repo.get_blocks_count()
+
+        h = hashlib.sha256(b"CommitContent").hexdigest()
+
+        with transaction(self.conn):
+            self.conn.execute("INSERT INTO commit_test VALUES (1, 'committed')")
+            block = self.service.append_block("COMMIT_EVENT", "asset:commit", h, {"test": "cm"})
+
+        rows = self.conn.execute("SELECT * FROM commit_test").fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["val"], "committed")
+        self.assertEqual(self.repo.get_blocks_count(), initial_count + 1)
+        saved_block = self.repo.get_by_index(block.block_index)
+        self.assertIsNotNone(saved_block)
+        self.assertEqual(saved_block.asset_id, "asset:commit")
+
+        ver = self.service.verify_chain_integrity()
+        self.assertTrue(ver.is_valid)
+
+    def test_append_failure_rolls_back_entire_transaction(self):
+        """Verify that if append_block fails (e.g. ValidationError), the entire transaction rolls back."""
+        self.conn.execute("CREATE TABLE fail_test (id INT, val TEXT)")
+        self.service.ensure_genesis_block()
+        initial_count = self.repo.get_blocks_count()
+
+        with self.assertRaises(ValidationError):
+            with transaction(self.conn):
+                self.conn.execute("INSERT INTO fail_test VALUES (1, 'should_rollback')")
+                # Invalid empty event_type triggers ValidationError
+                self.service.append_block("", "asset:fail", "a" * 64, {"test": "fail"})
+
+        # The prior domain insert must be rolled back
+        rows = self.conn.execute("SELECT * FROM fail_test").fetchall()
+        self.assertEqual(len(rows), 0)
+        self.assertEqual(self.repo.get_blocks_count(), initial_count)
+
+    def test_nested_transaction_isolation(self):
+        """Verify that nested transactions allow inner rollbacks without destroying outer transaction."""
+        self.conn.execute("CREATE TABLE nest_test (id INT, val TEXT)")
+        self.service.ensure_genesis_block()
+
+        h1 = hashlib.sha256(b"Outer").hexdigest()
+        h2 = hashlib.sha256(b"InnerFail").hexdigest()
+
+        with transaction(self.conn):
+            self.conn.execute("INSERT INTO nest_test VALUES (1, 'outer')")
+
+            # Inner failing transaction
+            try:
+                with transaction(self.conn):
+                    self.conn.execute("INSERT INTO nest_test VALUES (2, 'inner_fail')")
+                    self.service.append_block("INNER_EVENT", "asset:inner", h2, {"nested": True})
+                    raise ValueError("Inner failure")
+            except ValueError:
+                pass
+
+            # Outer continues and appends block
+            b_outer = self.service.append_block("OUTER_EVENT", "asset:outer", h1, {"outer": True})
+
+        rows = [r["val"] for r in self.conn.execute("SELECT * FROM nest_test ORDER BY id").fetchall()]
+        self.assertEqual(rows, ["outer"])
+        self.assertIsNotNone(self.repo.get_by_index(b_outer.block_index))
+        # Inner block was rolled back
+        self.assertEqual(len(self.repo.find_by_asset_id("asset:inner")), 0)
+        self.assertEqual(len(self.repo.find_by_asset_id("asset:outer")), 1)
+
+    def test_service_transaction_helper(self):
+        """Verify service.transaction() context manager convenience method."""
+        self.conn.execute("CREATE TABLE helper_test (id INT)")
+        self.service.ensure_genesis_block()
+        h = hashlib.sha256(b"HelperContent").hexdigest()
+
+        with self.service.transaction():
+            self.conn.execute("INSERT INTO helper_test VALUES (123)")
+            self.service.append_block("HELPER_EVENT", "asset:helper", h, {"helper": True})
+
+        rows = self.conn.execute("SELECT * FROM helper_test").fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(self.service.conn, self.conn)
 
 
 if __name__ == "__main__":

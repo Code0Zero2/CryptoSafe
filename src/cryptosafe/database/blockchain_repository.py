@@ -3,6 +3,7 @@
 import sqlite3
 from dataclasses import dataclass
 from cryptosafe.common.errors import ValidationError
+from cryptosafe.database.connection import transaction
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,11 @@ class BlockchainRepository:
 
     def __init__(self, conn: sqlite3.Connection):
         self._conn = conn
+
+    @property
+    def conn(self) -> sqlite3.Connection:
+        """Return the underlying SQLite connection."""
+        return self._conn
 
     @staticmethod
     def _row_to_block(row: sqlite3.Row) -> Block:
@@ -53,10 +59,13 @@ class BlockchainRepository:
         previous_hash: str,
         block_hash: str,
         created_by: int | None = None,
+        external_transaction: bool = False,
     ) -> Block:
         """Insert a new block into the blockchain.
 
         Strictly append-only; update or delete are blocked by DB triggers.
+        Uses savepoint transactions to participate safely in outer transactions
+        without premature commits.
         """
         if not isinstance(block_index, int) or block_index < 0:
             raise ValidationError("Index blok harus berupa bilangan bulat non-negatif.")
@@ -83,7 +92,7 @@ class BlockchainRepository:
             raise ValidationError("Block hash wajib diisi.")
 
         try:
-            with self._conn:
+            with transaction(self._conn):
                 cursor = self._conn.execute(
                     """
                     INSERT INTO blockchain_blocks (
