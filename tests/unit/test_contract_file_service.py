@@ -1,10 +1,15 @@
 """Unit tests for ContractFileService."""
 
 import os
+from pathlib import Path
 import secrets
+import sys
 import tempfile
 import unittest
-from pathlib import Path
+
+src_dir = Path(__file__).resolve().parent.parent.parent / "src"
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
 
 from cryptosafe.common.errors import CryptoOperationError, ValidationError
 from cryptosafe.crypto.file_crypto_service import FileCryptoService
@@ -190,7 +195,7 @@ class TestContractFileService(unittest.TestCase):
         # Encrypted file on disk should be removed
         self.assertFalse(vault_file.exists())
 
-    def test_delete_attachment_gracefully_handles_missing_physical_file(self):
+    def test_delete_attachment_fails_when_physical_file_missing(self):
         sample_path = self.work_dir / "missing_physical.txt"
         sample_path.write_text("Delete me.")
         record = self.vault_service.attach_file(
@@ -203,10 +208,12 @@ class TestContractFileService(unittest.TestCase):
         vault_file = Path(record.encrypted_path)
         vault_file.unlink()  # Manually delete disk file
 
-        # Deletion from service should still succeed
-        deleted = self.vault_service.delete_file(record.id, self.alice.id)
-        self.assertTrue(deleted)
-        self.assertIsNone(self.file_repo.get_by_id(record.id, self.alice.id))
+        # Deletion must fail and abort before modifying database
+        with self.assertRaises(ValidationError):
+            self.vault_service.delete_file(record.id, self.alice.id)
+
+        # Database record must still exist to keep audit trail consistent
+        self.assertIsNotNone(self.file_repo.get_by_id(record.id, self.alice.id))
 
     def test_user_isolation(self):
         sample_path = self.work_dir / "alice_only.txt"

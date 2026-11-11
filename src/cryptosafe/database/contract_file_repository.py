@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from cryptosafe.common.errors import ValidationError
+from cryptosafe.database.connection import transaction
 
 DEFAULT_FILE_ALGORITHM = "ChaCha20-Poly1305"
 
@@ -29,6 +30,11 @@ class ContractFileRepository:
 
     def __init__(self, conn: sqlite3.Connection):
         self._conn = conn
+
+    @property
+    def conn(self) -> sqlite3.Connection:
+        """Return the underlying SQLite connection."""
+        return self._conn
 
     @staticmethod
     def _row_to_file(row: sqlite3.Row) -> ContractFile:
@@ -73,7 +79,7 @@ class ContractFileRepository:
         now_iso = datetime.now(timezone.utc).isoformat()
 
         try:
-            with self._conn:
+            with transaction(self._conn):
                 cursor = self._conn.execute(
                     """
                     INSERT INTO contract_files (
@@ -159,7 +165,7 @@ class ContractFileRepository:
 
     def delete_file(self, file_id: int, user_id: int) -> bool:
         """Delete attachment metadata if owned by user."""
-        with self._conn:
+        with transaction(self._conn):
             cursor = self._conn.execute(
                 """
                 DELETE FROM contract_files
@@ -170,4 +176,3 @@ class ContractFileRepository:
                 (file_id, user_id),
             )
             return cursor.rowcount > 0
-

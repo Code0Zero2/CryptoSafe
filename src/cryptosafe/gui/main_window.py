@@ -120,7 +120,10 @@ class MainWindow(QMainWindow):
             contract_file_service = ContractFileService(
                 repository=contract_file_repo,
                 crypto_service=self._file_crypto_service,
+                blockchain_service=self._blockchain_service,
             )
+        elif getattr(contract_file_service, "blockchain_service", None) is None:
+            contract_file_service.blockchain_service = self._blockchain_service
         self._contract_file_service = contract_file_service
 
         if contract_service is None:
@@ -447,4 +450,3 @@ class MainWindow(QMainWindow):
         self.login_page.reset_fields()
         self._refresh_usb_detection()
         self.stack.setCurrentIndex(0)
-

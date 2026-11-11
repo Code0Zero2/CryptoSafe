@@ -1,6 +1,12 @@
 """Unit tests for ContractFileRepository."""
 
+from pathlib import Path
+import sys
 import unittest
+
+src_dir = Path(__file__).resolve().parent.parent.parent / "src"
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
 
 from cryptosafe.common.errors import ValidationError
 from cryptosafe.database.connection import get_connection
@@ -185,4 +191,3 @@ class TestContractFileRepository(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
