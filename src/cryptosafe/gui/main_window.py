@@ -101,9 +101,18 @@ class MainWindow(QMainWindow):
             contract_repository = ContractRepository(conn)
         self._contract_repository = contract_repository
 
+        if blockchain_service is None:
+            blockchain_repo = BlockchainRepository(conn)
+            blockchain_service = BlockchainService(blockchain_repo)
+        self._blockchain_service = blockchain_service
+
         if message_service is None:
             message_repo = EncryptedMessageRepository(conn)
-            message_service = EncryptedMessageService(message_repo, crypto_service=self._text_crypto_service)
+            message_service = EncryptedMessageService(
+                message_repo,
+                crypto_service=self._text_crypto_service,
+                blockchain_service=self._blockchain_service,
+            )
         self._message_service = message_service
 
         if contract_file_service is None:
@@ -113,11 +122,6 @@ class MainWindow(QMainWindow):
                 crypto_service=self._file_crypto_service,
             )
         self._contract_file_service = contract_file_service
-
-        if blockchain_service is None:
-            blockchain_repo = BlockchainRepository(conn)
-            blockchain_service = BlockchainService(blockchain_repo)
-        self._blockchain_service = blockchain_service
 
         if contract_service is None:
             contract_service = ContractService(

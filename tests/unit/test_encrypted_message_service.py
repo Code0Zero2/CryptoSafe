@@ -1,6 +1,12 @@
-﻿import unittest
+import sys
+import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
+
+src_dir = Path(__file__).resolve().parent.parent.parent / "src"
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
 
 from cryptosafe.common.errors import ValidationError
 from cryptosafe.crypto.text_crypto_service import TextCryptoService

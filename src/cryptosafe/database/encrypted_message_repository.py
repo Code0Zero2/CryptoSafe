@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from cryptosafe.common.errors import ValidationError
+from cryptosafe.database.connection import transaction
 
 
 VALID_CONTENT_TYPES = ("note", "clause", "draft")
@@ -31,6 +32,11 @@ class EncryptedMessageRepository:
 
     def __init__(self, conn: sqlite3.Connection):
         self._conn = conn
+
+    @property
+    def conn(self) -> sqlite3.Connection:
+        """Return the underlying SQLite database connection."""
+        return self._conn
 
     @staticmethod
     def _row_to_message(row: sqlite3.Row) -> EncryptedMessage:
@@ -97,7 +103,7 @@ class EncryptedMessageRepository:
         now = datetime.now(timezone.utc).isoformat()
 
         try:
-            with self._conn:
+            with transaction(self._conn):
                 cursor = self._conn.execute(
                     """
                     INSERT INTO encrypted_messages (
@@ -186,7 +192,7 @@ class EncryptedMessageRepository:
         label, ciphertext = self._validate_message(label, ciphertext)
         now = datetime.now(timezone.utc).isoformat()
 
-        with self._conn:
+        with transaction(self._conn):
             cursor = self._conn.execute(
                 """
                 UPDATE encrypted_messages
@@ -217,7 +223,7 @@ class EncryptedMessageRepository:
 
     def delete_message(self, message_id: int, user_id: int) -> bool:
         """Delete a message only if its contract belongs to the user."""
-        with self._conn:
+        with transaction(self._conn):
             cursor = self._conn.execute(
                 """
                 DELETE FROM encrypted_messages
