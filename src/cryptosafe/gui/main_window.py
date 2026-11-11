@@ -162,7 +162,7 @@ class MainWindow(QMainWindow):
 
         self.login_page = LoginPage(self)
         self.dashboard_page = DashboardPage(self)
-        self.register_page = RegisterPage(self)
+        self.register_page = RegisterPage(parent=self, usb_service=self._usb_service, face_service=self._face_service)
         self.text_page = TextPage(text_crypto_service=self._text_crypto_service, parent=self)
         self.file_page = FilePage(file_crypto_service=self._file_crypto_service, parent=self)
         self.contract_page = ContractPage(
@@ -427,6 +427,7 @@ class MainWindow(QMainWindow):
     def _on_switch_to_register(self):
         self.login_page.reset_fields()
         self.register_page.reset_fields()
+        self.register_page._refresh_usb_drives()
         self.stack.setCurrentIndex(2)
 
     def _on_switch_to_login(self):
@@ -437,11 +438,45 @@ class MainWindow(QMainWindow):
 
     def _on_register_requested(self, username: str, password: str, confirm: str):
         try:
+            # 1. Register base user account
             user = self._auth_service.register_user(username, password, confirm)
+
+            enrolled_mfa = []
+
+            # 2. Enroll USB token if selected during registration
+            selected_usb = getattr(self.register_page, "selected_usb_path", None)
+            if selected_usb and self._usb_service:
+                try:
+                    cred, token_path = self._usb_service.enroll_token(user.id, selected_usb)
+                    enrolled_mfa.append("Token USB")
+                    logger.info("USB token enrolled during registration for %s at %s", user.username, token_path)
+                except Exception as usb_err:
+                    logger.warning("Failed enrolling USB token during registration: %s", usb_err)
+
+            # 3. Enroll Face ID biometric if captured during registration
+            captured_face = getattr(self.register_page, "captured_face_frame", None)
+            if captured_face is not None and self._face_service:
+                try:
+                    self._face_service.enroll_face(
+                        user.id,
+                        captured_face,
+                        user_consent=True,
+                        password=password,
+                    )
+                    enrolled_mfa.append("Face ID")
+                    logger.info("Face ID enrolled during registration for %s", user.username)
+                except Exception as face_err:
+                    logger.warning("Failed enrolling Face ID during registration: %s", face_err)
+
             self.register_page.reset_fields()
             self.login_page.reset_fields()
             self.login_page.username_input.setText(user.username)
-            self.login_page.show_error("Registrasi berhasil! Silakan masuk dengan kata sandi Anda.")
+            if enrolled_mfa:
+                self.login_page.show_error(
+                    f"Registrasi berhasil! Akun dilindungi dengan {' & '.join(enrolled_mfa)}. Silakan masuk."
+                )
+            else:
+                self.login_page.show_error("Registrasi berhasil! Silakan masuk dengan kata sandi Anda.")
             self.login_page.error_label.setStyleSheet("color: #059669; font-size: 12px; font-weight: 500;")
             self._refresh_usb_detection()
             self.stack.setCurrentIndex(0)
