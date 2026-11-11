@@ -1,4 +1,4 @@
-"""Login page prototype with visible simulation markers (M1)."""
+"""Login page with authentication and MFA hardware indicators."""
 
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import (
@@ -31,78 +31,88 @@ class LoginPage(QWidget):
         # Central Card Container
         card = QFrame()
         card.setFrameShape(QFrame.StyledPanel)
-        card.setMaximumWidth(460)
+        card.setMaximumWidth(440)
+        card.setStyleSheet(
+            "QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; }"
+        )
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(28, 28, 28, 28)
-        card_layout.setSpacing(14)
+        card_layout.setContentsMargins(32, 32, 32, 32)
+        card_layout.setSpacing(16)
 
-        # Title & Subtitle
-        title = QLabel("CRYPTOSAFE")
+        # Header with Logo Mark
+        title = QLabel("CryptoSafe")
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size: 24px; font-weight: bold; letter-spacing: 1px;")
+        title.setStyleSheet(
+            "font-size: 26px; font-weight: 800; color: #0F172A; letter-spacing: -0.5px; border: none;"
+        )
         card_layout.addWidget(title)
 
-        subtitle = QLabel("Multi-Factor Cryptographic Demonstrator")
+        subtitle = QLabel("Sistem Manajemen Dokumen Kontrak Rahasia")
         subtitle.setAlignment(Qt.AlignCenter)
-        subtitle.setStyleSheet("color: #64748B; font-size: 12px;")
+        subtitle.setStyleSheet("color: #64748B; font-size: 12px; font-weight: 500; border: none;")
         card_layout.addWidget(subtitle)
 
-        # Demo Banner
-        demo_banner = QLabel("STATUS: M5 AUTH TERINTEGRASI (Argon2id + USB Challenge-Response + Face Recognition)\nSeluruh faktor multi-autentikasi aktif.")
-        demo_banner.setAlignment(Qt.AlignCenter)
-        demo_banner.setStyleSheet(
-            "background-color: #ECFDF5; color: #065F46; border: 1px solid #10B981; "
-            "padding: 8px; border-radius: 4px; font-weight: 600; font-size: 11px;"
-        )
-        card_layout.addWidget(demo_banner)
-
         # Input fields
-        card_layout.addWidget(QLabel("Username:"))
+        user_lbl = QLabel("Nama Pengguna")
+        user_lbl.setStyleSheet("font-size: 12px; font-weight: 600; color: #334155; border: none;")
+        card_layout.addWidget(user_lbl)
         self.username_input = QLineEdit()
-        self.username_input.setPlaceholderText("Masukkan username")
+        self.username_input.setPlaceholderText("Masukkan username Anda")
+        self.username_input.setMinimumHeight(40)
         card_layout.addWidget(self.username_input)
 
-        card_layout.addWidget(QLabel("Password:"))
+        pass_lbl = QLabel("Kata Sandi")
+        pass_lbl.setStyleSheet("font-size: 12px; font-weight: 600; color: #334155; border: none;")
+        card_layout.addWidget(pass_lbl)
         self.password_input = QLineEdit()
-        self.password_input.setPlaceholderText("Masukkan password")
+        self.password_input.setPlaceholderText("Masukkan kata sandi")
         self.password_input.setEchoMode(QLineEdit.Password)
+        self.password_input.setMinimumHeight(40)
         card_layout.addWidget(self.password_input)
 
-        # Factors Status Box
-        factors_box = QGroupBox("Status Faktor Autentikasi Tambahan")
-        factors_layout = QVBoxLayout(factors_box)
-        factors_layout.setSpacing(6)
+        # Security Devices Box (Sleek Hardware Indicators)
+        devices_card = QFrame()
+        devices_card.setStyleSheet(
+            "QFrame { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 10px; }"
+        )
+        devices_layout = QVBoxLayout(devices_card)
+        devices_layout.setSpacing(6)
+        devices_layout.setContentsMargins(10, 8, 10, 8)
 
         self.usb_status_label = QLabel("USB Token: Tidak Terdeteksi")
-        self.usb_status_label.setStyleSheet("color: #B45309; font-size: 11px; font-weight: 500;")
-        factors_layout.addWidget(self.usb_status_label)
+        self.usb_status_label.setStyleSheet("color: #64748B; font-size: 11px; font-weight: 500; border: none;")
+        devices_layout.addWidget(self.usb_status_label)
 
-        self.face_status_label = QLabel("Face Recognition: Kamera Siap (Aktif jika akun terdaftar)")
-        self.face_status_label.setStyleSheet("color: #4B5563; font-size: 11px; font-weight: 500;")
-        factors_layout.addWidget(self.face_status_label)
+        self.face_status_label = QLabel("Face Recognition: Siap diverifikasi")
+        self.face_status_label.setStyleSheet("color: #64748B; font-size: 11px; font-weight: 500; border: none;")
+        devices_layout.addWidget(self.face_status_label)
 
-        card_layout.addWidget(factors_box)
+        card_layout.addWidget(devices_card)
 
         # Error / Validation Label
         self.error_label = QLabel("")
         self.error_label.setAlignment(Qt.AlignCenter)
         self.error_label.setWordWrap(True)
-        self.error_label.setStyleSheet("color: #DC2626; font-size: 12px; font-weight: 500;")
+        self.error_label.setStyleSheet("color: #E11D48; font-size: 12px; font-weight: 500; border: none;")
         self.error_label.setVisible(False)
         card_layout.addWidget(self.error_label)
 
         # Action Buttons
-        self.login_button = QPushButton("Masuk")
+        self.login_button = QPushButton("Masuk ke Sistem")
+        self.login_button.setMinimumHeight(42)
         self.login_button.setStyleSheet(
-            "background-color: #2563EB; color: white; padding: 10px; "
-            "font-weight: bold; border-radius: 4px; font-size: 13px;"
+            "QPushButton { background-color: #4F46E5; color: white; border: none; "
+            "font-weight: 600; border-radius: 6px; font-size: 13px; }"
+            "QPushButton:hover { background-color: #4338CA; }"
+            "QPushButton:pressed { background-color: #3730A3; }"
         )
         self.login_button.clicked.connect(self._handle_login)
         card_layout.addWidget(self.login_button)
 
-        self.register_switch_button = QPushButton("Belum punya akun? Daftar sekarang")
+        self.register_switch_button = QPushButton("Belum memiliki akun? Daftar di sini")
         self.register_switch_button.setStyleSheet(
-            "background: transparent; color: #2563EB; font-size: 12px; text-decoration: underline; border: none;"
+            "QPushButton { background: transparent; color: #4F46E5; font-size: 12px; font-weight: 500; border: none; }"
+            "QPushButton:hover { text-decoration: underline; color: #3730A3; }"
         )
         self.register_switch_button.clicked.connect(self.switch_to_register_requested.emit)
         card_layout.addWidget(self.register_switch_button)
@@ -129,10 +139,10 @@ class LoginPage(QWidget):
         """Update USB detection status on the login UI."""
         if is_detected:
             self.usb_status_label.setText(f"USB Token: Terdeteksi ({info or 'Siap diverifikasi'})")
-            self.usb_status_label.setStyleSheet("color: #059669; font-size: 11px; font-weight: bold;")
+            self.usb_status_label.setStyleSheet("color: #059669; font-size: 11px; font-weight: 600; border: none;")
         else:
-            self.usb_status_label.setText("USB Token: Tidak Terdeteksi (Pasang USB token terdaftar jika diperlukan)")
-            self.usb_status_label.setStyleSheet("color: #B45309; font-size: 11px; font-weight: 500;")
+            self.usb_status_label.setText("USB Token: Tidak Terdeteksi (Pasang token jika akun menggunakan USB 2FA)")
+            self.usb_status_label.setStyleSheet("color: #64748B; font-size: 11px; font-weight: 500; border: none;")
 
     def reset_fields(self):
         """Reset inputs and clear errors upon logout."""

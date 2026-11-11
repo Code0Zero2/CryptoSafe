@@ -15,6 +15,7 @@ from cryptosafe.gui.usb_dialog import UsbEnrollDialog
 from cryptosafe.gui.face_capture_dialog import FaceCaptureDialog
 from cryptosafe.gui.stego_page import StegoPage
 from cryptosafe.gui.audit_dialog import AuditDialog
+from cryptosafe.gui.styles import GLOBAL_STYLESHEET
 from cryptosafe.auth.auth_service import AuthService
 from cryptosafe.auth.usb_token_service import UsbTokenService
 from cryptosafe.auth.face_service import FaceService
@@ -58,9 +59,10 @@ class MainWindow(QMainWindow):
         parent=None,
     ):
         super().__init__(parent)
-        self.setWindowTitle("CRYPTOSAFE — Confidential Contract Management System")
-        self.resize(960, 680)
-        self.setMinimumSize(800, 560)
+        self.setWindowTitle("CryptoSafe — Confidential Contract Management")
+        self.resize(1000, 700)
+        self.setMinimumSize(850, 580)
+        self.setStyleSheet(GLOBAL_STYLESHEET)
 
         if auth_service is not None:
             if usb_service is None:

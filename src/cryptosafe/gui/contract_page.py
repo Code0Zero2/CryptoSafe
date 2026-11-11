@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QDialog,
     QFormLayout, QLineEdit, QTextEdit, QComboBox, QMessageBox,
-    QInputDialog, QFileDialog,
+    QInputDialog, QFileDialog, QScrollArea, QFrame,
 )
 
 from cryptosafe.database.contract_repository import VALID_STATUSES
@@ -33,40 +33,112 @@ class ContractPage(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(12)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(32, 28, 32, 28)
+        main_layout.setSpacing(18)
 
+        # Header bar
         header = QHBoxLayout()
-
+        title_box = QVBoxLayout()
+        title_box.setSpacing(4)
         title = QLabel("Manajemen Kontrak")
-        title.setStyleSheet("font-size: 20px; font-weight: bold;")
-        header.addWidget(title)
+        title.setStyleSheet("font-size: 24px; font-weight: 700; color: #0F172A;")
+        title_box.addWidget(title)
+
+        subtitle = QLabel("Penyimpanan kontrak hukum terenkripsi AES-256-GCM, catatan rahasia, dan brankas berkas.")
+        subtitle.setStyleSheet("font-size: 13px; color: #64748B; font-weight: 500;")
+        title_box.addWidget(subtitle)
+        header.addLayout(title_box)
 
         header.addStretch()
 
-        self.back_button = QPushButton("Kembali ke Dashboard")
-        self.back_button.clicked.connect(
-            self.back_to_dashboard_requested.emit
+        self.back_button = QPushButton("← Kembali ke Dashboard")
+        self.back_button.setStyleSheet(
+            "QPushButton {"
+            "   background-color: #FFFFFF; color: #475569; border: 1.5px solid #CBD5E1;"
+            "   padding: 7px 16px; font-weight: 600; border-radius: 6px; font-size: 12px;"
+            "}"
+            "QPushButton:hover {"
+            "   background-color: #F1F5F9; color: #0F172A;"
+            "}"
         )
+        self.back_button.clicked.connect(self.back_to_dashboard_requested.emit)
         header.addWidget(self.back_button)
 
-        layout.addLayout(header)
+        main_layout.addLayout(header)
 
-        layout.addWidget(QLabel("Daftar Kontrak"))
+        # Scroll Area for the three cards
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("background: transparent;")
 
-        contract_buttons = QHBoxLayout()
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        content_layout = QVBoxLayout(container)
+        content_layout.setSpacing(20)
+        content_layout.setContentsMargins(0, 0, 0, 12)
+
+        # Helper styles
+        card_style = (
+            "QFrame {"
+            "   background-color: #FFFFFF;"
+            "   border: 1px solid #E2E8F0;"
+            "   border-radius: 10px;"
+            "   padding: 16px;"
+            "}"
+        )
+        btn_teal = (
+            "QPushButton {"
+            "   background-color: #0F766E; color: #FFFFFF; padding: 7px 16px;"
+            "   font-weight: 600; border-radius: 6px; font-size: 12px; border: none;"
+            "}"
+            "QPushButton:hover { background-color: #0D9488; }"
+        )
+        btn_indigo = (
+            "QPushButton {"
+            "   background-color: #4F46E5; color: #FFFFFF; padding: 7px 16px;"
+            "   font-weight: 600; border-radius: 6px; font-size: 12px; border: none;"
+            "}"
+            "QPushButton:hover { background-color: #4338CA; }"
+        )
+        btn_danger = (
+            "QPushButton {"
+            "   background-color: #FFFFFF; color: #DC2626; border: 1.5px solid #FECACA;"
+            "   padding: 7px 16px; font-weight: 600; border-radius: 6px; font-size: 12px;"
+            "}"
+            "QPushButton:hover { background-color: #FEF2F2; border-color: #F87171; }"
+        )
+
+        # Card 1: Contracts
+        contract_card = QFrame()
+        contract_card.setStyleSheet(card_style)
+        c_layout = QVBoxLayout(contract_card)
+        c_layout.setSpacing(12)
+        c_layout.setContentsMargins(18, 18, 18, 18)
+
+        c_header = QHBoxLayout()
+        c_title_box = QVBoxLayout()
+        c_title_box.setSpacing(2)
+        c_title = QLabel("Daftar Dokumen Kontrak")
+        c_title.setStyleSheet("font-size: 16px; font-weight: 700; color: #0F172A; border: none;")
+        c_title_box.addWidget(c_title)
+        c_desc = QLabel("Pilih kontrak dari tabel di bawah untuk melihat catatan terenkripsi dan berkas terkait.")
+        c_desc.setStyleSheet("font-size: 12px; color: #64748B; border: none;")
+        c_title_box.addWidget(c_desc)
+        c_header.addLayout(c_title_box)
+        c_header.addStretch()
 
         self.add_contract_button = QPushButton("Tambah Kontrak")
+        self.add_contract_button.setStyleSheet(btn_teal)
         self.add_contract_button.clicked.connect(self._add_contract)
-        contract_buttons.addWidget(self.add_contract_button)
+        c_header.addWidget(self.add_contract_button)
 
         self.delete_contract_button = QPushButton("Hapus Kontrak")
+        self.delete_contract_button.setStyleSheet(btn_danger)
         self.delete_contract_button.clicked.connect(self._delete_contract)
-        contract_buttons.addWidget(self.delete_contract_button)
-
-        contract_buttons.addStretch()
-        layout.addLayout(contract_buttons)
+        c_header.addWidget(self.delete_contract_button)
+        c_layout.addLayout(c_header)
 
         self.contract_table = QTableWidget(0, 6)
         self.contract_table.setHorizontalHeaderLabels([
@@ -85,43 +157,71 @@ class ContractPage(QWidget):
         self.contract_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
+        self.contract_table.setMinimumHeight(180)
         self.contract_table.itemSelectionChanged.connect(
             self._on_contract_selected
         )
-        layout.addWidget(self.contract_table)
+        c_layout.addWidget(self.contract_table)
 
         status_layout = QHBoxLayout()
-        status_layout.addWidget(QLabel("Ubah Status:"))
+        status_lbl = QLabel("Ubah Status Kontrak Terpilih:")
+        status_lbl.setStyleSheet("font-size: 12px; font-weight: 600; color: #475569; border: none;")
+        status_layout.addWidget(status_lbl)
 
         self.status_combo = QComboBox()
         self.status_combo.addItems(VALID_STATUSES)
+        self.status_combo.setMinimumWidth(160)
         status_layout.addWidget(self.status_combo)
 
         self.update_status_button = QPushButton("Simpan Status")
+        self.update_status_button.setStyleSheet(
+            "QPushButton {"
+            "   background-color: #F1F5F9; color: #334155; border: 1px solid #CBD5E1;"
+            "   padding: 7px 16px; font-weight: 600; border-radius: 6px; font-size: 12px;"
+            "}"
+            "QPushButton:hover { background-color: #E2E8F0; }"
+        )
         self.update_status_button.clicked.connect(self._update_status)
         status_layout.addWidget(self.update_status_button)
-
         status_layout.addStretch()
-        layout.addLayout(status_layout)
+        c_layout.addLayout(status_layout)
 
-        layout.addWidget(QLabel("Catatan Kontrak Terenkripsi"))
+        content_layout.addWidget(contract_card)
 
-        message_buttons = QHBoxLayout()
+        # Card 2: Encrypted Notes
+        msg_card = QFrame()
+        msg_card.setStyleSheet(card_style)
+        m_layout = QVBoxLayout(msg_card)
+        m_layout.setSpacing(12)
+        m_layout.setContentsMargins(18, 18, 18, 18)
+
+        m_header = QHBoxLayout()
+        m_title_box = QVBoxLayout()
+        m_title_box.setSpacing(2)
+        m_title = QLabel("Catatan Kontrak Terenkripsi (AES-256-GCM)")
+        m_title.setStyleSheet("font-size: 16px; font-weight: 700; color: #0F172A; border: none;")
+        m_title_box.addWidget(m_title)
+        m_desc = QLabel("Isi dan klausul catatan disimpan terenkripsi di database dengan kunci derivasi pengguna.")
+        m_desc.setStyleSheet("font-size: 12px; color: #64748B; border: none;")
+        m_title_box.addWidget(m_desc)
+        m_header.addLayout(m_title_box)
+        m_header.addStretch()
 
         self.add_message_button = QPushButton("Tambah Catatan")
+        self.add_message_button.setStyleSheet(btn_teal)
         self.add_message_button.clicked.connect(self._add_message)
-        message_buttons.addWidget(self.add_message_button)
+        m_header.addWidget(self.add_message_button)
 
         self.open_message_button = QPushButton("Buka Catatan")
+        self.open_message_button.setStyleSheet(btn_indigo)
         self.open_message_button.clicked.connect(self._open_message)
-        message_buttons.addWidget(self.open_message_button)
+        m_header.addWidget(self.open_message_button)
 
         self.delete_message_button = QPushButton("Hapus Catatan")
+        self.delete_message_button.setStyleSheet(btn_danger)
         self.delete_message_button.clicked.connect(self._delete_message)
-        message_buttons.addWidget(self.delete_message_button)
-
-        message_buttons.addStretch()
-        layout.addLayout(message_buttons)
+        m_header.addWidget(self.delete_message_button)
+        m_layout.addLayout(m_header)
 
         self.message_table = QTableWidget(0, 4)
         self.message_table.setHorizontalHeaderLabels([
@@ -139,26 +239,45 @@ class ContractPage(QWidget):
         self.message_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
-        layout.addWidget(self.message_table)
+        self.message_table.setMinimumHeight(150)
+        m_layout.addWidget(self.message_table)
 
-        layout.addWidget(QLabel("Lampiran Berkas Kontrak (Secure File Vault)"))
+        content_layout.addWidget(msg_card)
 
-        file_buttons = QHBoxLayout()
+        # Card 3: Secure File Vault
+        file_card = QFrame()
+        file_card.setStyleSheet(card_style)
+        f_layout = QVBoxLayout(file_card)
+        f_layout.setSpacing(12)
+        f_layout.setContentsMargins(18, 18, 18, 18)
+
+        f_header = QHBoxLayout()
+        f_title_box = QVBoxLayout()
+        f_title_box.setSpacing(2)
+        f_title = QLabel("Lampiran Berkas Kontrak (Secure File Vault)")
+        f_title.setStyleSheet("font-size: 16px; font-weight: 700; color: #0F172A; border: none;")
+        f_title_box.addWidget(f_title)
+        f_desc = QLabel("Berkas fisik dienkripsi dengan ChaCha20-Poly1305 dan hash SHA-256 dicatat di blockchain ledger.")
+        f_desc.setStyleSheet("font-size: 12px; color: #64748B; border: none;")
+        f_title_box.addWidget(f_desc)
+        f_header.addLayout(f_title_box)
+        f_header.addStretch()
 
         self.add_file_button = QPushButton("Tambah Lampiran")
+        self.add_file_button.setStyleSheet(btn_teal)
         self.add_file_button.clicked.connect(self._add_file)
-        file_buttons.addWidget(self.add_file_button)
+        f_header.addWidget(self.add_file_button)
 
         self.download_file_button = QPushButton("Unduh / Dekripsi Berkas")
+        self.download_file_button.setStyleSheet(btn_indigo)
         self.download_file_button.clicked.connect(self._download_file)
-        file_buttons.addWidget(self.download_file_button)
+        f_header.addWidget(self.download_file_button)
 
         self.delete_file_button = QPushButton("Hapus Lampiran")
+        self.delete_file_button.setStyleSheet(btn_danger)
         self.delete_file_button.clicked.connect(self._delete_file)
-        file_buttons.addWidget(self.delete_file_button)
-
-        file_buttons.addStretch()
-        layout.addLayout(file_buttons)
+        f_header.addWidget(self.delete_file_button)
+        f_layout.addLayout(f_header)
 
         self.file_table = QTableWidget(0, 5)
         self.file_table.setHorizontalHeaderLabels([
@@ -176,7 +295,13 @@ class ContractPage(QWidget):
         self.file_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
-        layout.addWidget(self.file_table)
+        self.file_table.setMinimumHeight(150)
+        f_layout.addWidget(self.file_table)
+
+        content_layout.addWidget(file_card)
+
+        scroll.setWidget(container)
+        main_layout.addWidget(scroll)
 
     def set_user(self, user_id: int):
         """Set the authenticated user and refresh their contracts."""

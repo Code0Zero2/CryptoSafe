@@ -36,20 +36,21 @@ class StegoPage(QWidget):
 
     def _setup_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(24, 24, 24, 24)
-        main_layout.setSpacing(16)
+        main_layout.setContentsMargins(32, 28, 32, 28)
+        main_layout.setSpacing(18)
 
         # Header bar
         header_layout = QHBoxLayout()
         title_box = QVBoxLayout()
-        title_lbl = QLabel("Steganografi Citra (LSB + Super-Enkripsi)")
-        title_lbl.setStyleSheet("font-size: 20px; font-weight: bold; color: #1E293B;")
+        title_box.setSpacing(4)
+        title_lbl = QLabel("Steganografi Citra (LSB)")
+        title_lbl.setStyleSheet("font-size: 24px; font-weight: 700; color: #0F172A;")
         title_box.addWidget(title_lbl)
 
         desc_lbl = QLabel(
-            "Sisipkan pesan rahasia terenkripsi (Vigenère + AES-256-GCM) ke dalam citra PNG tanpa merusak citra asli."
+            "Sisipkan pesan rahasia terenkripsi (Vigenère + AES-256-GCM) ke dalam citra PNG tanpa degradasi visual."
         )
-        desc_lbl.setStyleSheet("font-size: 12px; color: #64748B;")
+        desc_lbl.setStyleSheet("font-size: 13px; color: #64748B; font-weight: 500;")
         title_box.addWidget(desc_lbl)
         header_layout.addLayout(title_box)
 
@@ -57,8 +58,13 @@ class StegoPage(QWidget):
 
         self.back_button = QPushButton("← Kembali ke Dashboard")
         self.back_button.setStyleSheet(
-            "background-color: #4B5563; color: white; padding: 6px 14px; "
-            "font-weight: bold; border-radius: 4px; font-size: 12px;"
+            "QPushButton {"
+            "   background-color: #FFFFFF; color: #475569; border: 1.5px solid #CBD5E1;"
+            "   padding: 7px 16px; font-weight: 600; border-radius: 6px; font-size: 12px;"
+            "}"
+            "QPushButton:hover {"
+            "   background-color: #F1F5F9; color: #0F172A;"
+            "}"
         )
         self.back_button.clicked.connect(self.back_to_dashboard_requested.emit)
         header_layout.addWidget(self.back_button)
@@ -148,9 +154,12 @@ class StegoPage(QWidget):
 
         # Generate Key button
         gen_btn_layout = QHBoxLayout()
-        self.embed_gen_key_btn = QPushButton("Generate Key")
+        self.embed_gen_key_btn = QPushButton("Buat Kunci Otomatis")
         self.embed_gen_key_btn.setStyleSheet(
-            "background-color: #0284C7; color: white; padding: 5px 14px; font-weight: bold; border-radius: 4px;"
+            "QPushButton {"
+            "   background-color: #4F46E5; color: white; padding: 6px 14px; font-weight: 600; border-radius: 6px; font-size: 11px; border: none;"
+            "}"
+            "QPushButton:hover { background-color: #4338CA; }"
         )
         self.embed_gen_key_btn.clicked.connect(self._on_generate_keys_clicked)
         gen_btn_layout.addWidget(self.embed_gen_key_btn)
@@ -166,7 +175,12 @@ class StegoPage(QWidget):
         self.embed_dst_input.setPlaceholderText("Simpan sebagai berkas PNG baru...")
         dst_row.addWidget(self.embed_dst_input)
 
+        btn_browse_style = (
+            "QPushButton { background-color: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; padding: 7px 14px; font-weight: 600; border-radius: 5px; font-size: 12px; } QPushButton:hover { background-color: #E2E8F0; }"
+        )
+
         self.embed_dst_btn = QPushButton("Pilih Lokasi...")
+        self.embed_dst_btn.setStyleSheet(btn_browse_style)
         self.embed_dst_btn.clicked.connect(self._browse_embed_dst)
         dst_row.addWidget(self.embed_dst_btn)
         layout.addLayout(dst_row)
@@ -174,8 +188,11 @@ class StegoPage(QWidget):
         # Embed Action Button
         self.embed_action_btn = QPushButton("Sisipkan & Enkripsi Pesan")
         self.embed_action_btn.setStyleSheet(
-            "background-color: #059669; color: white; padding: 10px; font-weight: bold; "
-            "border-radius: 4px; font-size: 13px;"
+            "QPushButton {"
+            "   background-color: #059669; color: white; padding: 10px; font-weight: 600; "
+            "   border-radius: 6px; font-size: 13px; border: none;"
+            "}"
+            "QPushButton:hover { background-color: #047857; }"
         )
         self.embed_action_btn.clicked.connect(self._on_embed_clicked)
         layout.addWidget(self.embed_action_btn)
@@ -238,8 +255,11 @@ class StegoPage(QWidget):
         # Extract Action Button
         self.extract_action_btn = QPushButton("Ekstrak & Dekripsi Pesan")
         self.extract_action_btn.setStyleSheet(
-            "background-color: #2563EB; color: white; padding: 10px; font-weight: bold; "
-            "border-radius: 4px; font-size: 13px;"
+            "QPushButton {"
+            "   background-color: #4F46E5; color: white; padding: 10px; font-weight: 600; "
+            "   border-radius: 6px; font-size: 13px; border: none;"
+            "}"
+            "QPushButton:hover { background-color: #4338CA; }"
         )
         self.extract_action_btn.clicked.connect(self._on_extract_clicked)
         layout.addWidget(self.extract_action_btn)
@@ -253,7 +273,10 @@ class StegoPage(QWidget):
         layout.addWidget(self.extract_output)
 
         out_btn_row = QHBoxLayout()
-        self.extract_copy_btn = QPushButton("Salin Pesan Terdekripsi")
+        self.extract_copy_btn = QPushButton("Salin Pesan ke Clipboard")
+        self.extract_copy_btn.setStyleSheet(
+            "QPushButton { background-color: #F8FAFC; color: #475569; border: 1px solid #CBD5E1; padding: 6px 14px; font-weight: 600; border-radius: 5px; font-size: 11px; } QPushButton:hover { background-color: #F1F5F9; }"
+        )
         self.extract_copy_btn.clicked.connect(lambda: self._copy_to_clipboard(self.extract_output.toPlainText()))
         out_btn_row.addWidget(self.extract_copy_btn)
         out_btn_row.addStretch()

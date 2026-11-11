@@ -120,21 +120,30 @@ class AuditDialog(QDialog):
 
         self.verify_btn = QPushButton("✓ Verifikasi Integritas Rantai")
         self.verify_btn.setStyleSheet(
-            "background-color: #059669; color: white; padding: 7px 16px; font-weight: bold; font-size: 12px; border-radius: 4px;"
+            "QPushButton {"
+            "   background-color: #059669; color: white; padding: 7px 18px; font-weight: 600; font-size: 12px; border-radius: 6px; border: none;"
+            "}"
+            "QPushButton:hover { background-color: #047857; }"
         )
         self.verify_btn.clicked.connect(self._on_verify_chain)
         btn_layout.addWidget(self.verify_btn)
 
         self.export_json_btn = QPushButton("Ekspor JSON")
         self.export_json_btn.setStyleSheet(
-            "background-color: #2563EB; color: white; padding: 7px 14px; font-weight: bold; font-size: 12px; border-radius: 4px;"
+            "QPushButton {"
+            "   background-color: #4F46E5; color: white; padding: 7px 16px; font-weight: 600; font-size: 12px; border-radius: 6px; border: none;"
+            "}"
+            "QPushButton:hover { background-color: #4338CA; }"
         )
         self.export_json_btn.clicked.connect(self._on_export_json)
         btn_layout.addWidget(self.export_json_btn)
 
         self.export_csv_btn = QPushButton("Ekspor CSV")
         self.export_csv_btn.setStyleSheet(
-            "background-color: #0D9488; color: white; padding: 7px 14px; font-weight: bold; font-size: 12px; border-radius: 4px;"
+            "QPushButton {"
+            "   background-color: #0F766E; color: white; padding: 7px 16px; font-weight: 600; font-size: 12px; border-radius: 6px; border: none;"
+            "}"
+            "QPushButton:hover { background-color: #0D9488; }"
         )
         self.export_csv_btn.clicked.connect(self._on_export_csv)
         btn_layout.addWidget(self.export_csv_btn)
@@ -143,7 +152,10 @@ class AuditDialog(QDialog):
 
         self.close_btn = QPushButton("Tutup")
         self.close_btn.setStyleSheet(
-            "padding: 7px 18px; font-weight: 500; font-size: 12px; border-radius: 4px; border: 1px solid #CBD5E1;"
+            "QPushButton {"
+            "   background-color: #FFFFFF; color: #475569; border: 1.5px solid #CBD5E1; padding: 7px 18px; font-weight: 600; font-size: 12px; border-radius: 6px;"
+            "}"
+            "QPushButton:hover { background-color: #F1F5F9; color: #0F172A; }"
         )
         self.close_btn.clicked.connect(self.accept)
         btn_layout.addWidget(self.close_btn)
