@@ -1,5 +1,7 @@
 """User authentication session manager."""
 
+from __future__ import annotations
+
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timezone

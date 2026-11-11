@@ -1,5 +1,7 @@
 """Local Face Recognition service with biometric template protection and informed consent."""
 
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -485,6 +487,53 @@ class FaceService:
             logger.info("Face biometric profile revoked for user_id=%s", user_id)
         return success
 
+    @staticmethod
+    def check_liveness(
+        frames: list[np.ndarray],
+    ) -> tuple[bool, str]:
+        """Check temporal micro-movement and texture depth to detect presentation spoofing (static photo prints / screen replay).
+
+        Returns:
+            tuple[bool, str]: (is_live, message)
+        """
+        if not frames or len(frames) < 2:
+            return True, "Jumlah frame tunggal, analisis liveness multi-frame dilewati."
+
+        grays = []
+        for f in frames:
+            if f is None or f.size == 0:
+                continue
+            if len(f.shape) == 3 and f.shape[2] == 3:
+                grays.append(cv2.cvtColor(f, cv2.COLOR_BGR2GRAY))
+            elif len(f.shape) == 2:
+                grays.append(f)
+
+        if len(grays) < 2:
+            return True, "Frame valid tidak mencukupi untuk analisis liveness."
+
+        # 1. Texture check (Laplacian variance) on latest frame to detect flat low-texture prints
+        lap_var = float(cv2.Laplacian(grays[-1], cv2.CV_64F).var())
+        if lap_var < 5.0:
+            return False, "Tekstur citra terlalu buram atau datar (terindikasi foto cetak berkualitas rendah)."
+
+        # 2. Temporal difference check across consecutive frames
+        diffs = []
+        for i in range(1, len(grays)):
+            if grays[i].shape == grays[i - 1].shape:
+                diff = float(np.mean(np.abs(grays[i].astype(np.float32) - grays[i - 1].astype(np.float32))))
+                diffs.append(diff)
+
+        if not diffs:
+            return True, "Liveness OK"
+
+        mean_diff = float(np.mean(diffs))
+
+        # Detect completely static identical freeze-frames or immobile photo prints
+        if mean_diff < 0.05:
+            return False, "Wajah terindikasi gambar statis (foto cetak/layar diam). Harap gerakkan sedikit kepala atau berkedip."
+
+        return True, "Wajah hidup terverifikasi (liveness OK)."
+
     def verify_face(
         self,
         user_id: int,
@@ -492,8 +541,15 @@ class FaceService:
         password: str | None = None,
         key: bytes | None = None,
         threshold: float = DEFAULT_FACE_THRESHOLD,
+        liveness_frames: list[np.ndarray] | None = None,
     ) -> bool:
-        """Verify face in image against user's stored encrypted template."""
+        """Verify face in image against user's stored encrypted template, with optional liveness verification."""
+        if liveness_frames is not None and len(liveness_frames) >= 2:
+            is_live, liveness_msg = self.check_liveness(liveness_frames)
+            if not is_live:
+                logger.warning("Liveness verification failed for user_id=%s: %s", user_id, liveness_msg)
+                raise AuthenticationError(f"Verifikasi keaslian wajah (liveness) gagal: {liveness_msg}")
+
         profile = self._repo.get_active_by_user_id(user_id)
         if not profile:
             raise AuthenticationError("Pengguna tidak memiliki profil biometrik wajah aktif yang terdaftar.")
