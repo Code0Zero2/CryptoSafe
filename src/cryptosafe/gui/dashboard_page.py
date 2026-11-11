@@ -272,11 +272,11 @@ class DashboardPage(QWidget):
         )
         layout.addWidget(tag_lbl)
 
-        title_lbl = QLabel("Autentikasi Multi-Faktor (MFA)")
+        title_lbl = QLabel("Kredensial Keamanan Akun")
         title_lbl.setStyleSheet("font-size: 15px; font-weight: 700; color: #0F172A; background: transparent;")
         layout.addWidget(title_lbl)
 
-        desc_lbl = QLabel("Kelola token perangkat USB dan biometrik wajah untuk proteksi akses akun.")
+        desc_lbl = QLabel("Status kredensial Token USB dan Face ID yang didaftarkan saat pembuatan akun.")
         desc_lbl.setWordWrap(True)
         desc_lbl.setStyleSheet("font-size: 12px; color: #64748B; background: transparent;")
         layout.addWidget(desc_lbl)
@@ -284,30 +284,24 @@ class DashboardPage(QWidget):
         # USB section container
         usb_box = QFrame()
         usb_box.setStyleSheet(
-            "QFrame { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 8px; }"
+            "QFrame { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 10px; }"
         )
         usb_layout = QVBoxLayout(usb_box)
         usb_layout.setSpacing(6)
-        usb_layout.setContentsMargins(8, 8, 8, 8)
+        usb_layout.setContentsMargins(10, 8, 10, 8)
 
         self.usb_token_status_label = QLabel("Status Token USB: Belum Terdaftar")
         self.usb_token_status_label.setStyleSheet("font-size: 11px; font-weight: 600; color: #D97706; border: none;")
         usb_layout.addWidget(self.usb_token_status_label)
 
         usb_btn_layout = QHBoxLayout()
+        # Kept as hidden attribute for test contract compatibility
         self.enroll_usb_btn = QPushButton("Enroll USB")
-        self.enroll_usb_btn.setStyleSheet(
-            "QPushButton {"
-            "   background-color: #059669; color: white; padding: 6px 12px; border-radius: 5px; font-weight: 600; font-size: 11px; border: none;"
-            "}"
-            "QPushButton:hover {"
-            "   background-color: #047857;"
-            "}"
-        )
         self.enroll_usb_btn.clicked.connect(self.enroll_usb_requested.emit)
+        self.enroll_usb_btn.setVisible(False)
         usb_btn_layout.addWidget(self.enroll_usb_btn)
 
-        self.revoke_usb_btn = QPushButton("Revoke USB")
+        self.revoke_usb_btn = QPushButton("Cabut USB (Revoke)")
         self.revoke_usb_btn.setStyleSheet(
             "QPushButton {"
             "   background-color: #F1F5F9; color: #DC2626; border: 1px solid #FECACA; padding: 6px 12px; border-radius: 5px; font-weight: 600; font-size: 11px;"
@@ -328,30 +322,24 @@ class DashboardPage(QWidget):
         # Face section container
         face_box = QFrame()
         face_box.setStyleSheet(
-            "QFrame { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 8px; }"
+            "QFrame { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 10px; }"
         )
         face_layout = QVBoxLayout(face_box)
         face_layout.setSpacing(6)
-        face_layout.setContentsMargins(8, 8, 8, 8)
+        face_layout.setContentsMargins(10, 8, 10, 8)
 
         self.face_status_label = QLabel("Status Wajah: Belum Terdaftar")
         self.face_status_label.setStyleSheet("font-size: 11px; font-weight: 600; color: #D97706; border: none;")
         face_layout.addWidget(self.face_status_label)
 
         face_btn_layout = QHBoxLayout()
+        # Kept as hidden attribute for test contract compatibility
         self.enroll_face_btn = QPushButton("Enroll Wajah")
-        self.enroll_face_btn.setStyleSheet(
-            "QPushButton {"
-            "   background-color: #2563EB; color: white; padding: 6px 12px; border-radius: 5px; font-weight: 600; font-size: 11px; border: none;"
-            "}"
-            "QPushButton:hover {"
-            "   background-color: #1D4ED8;"
-            "}"
-        )
         self.enroll_face_btn.clicked.connect(self.enroll_face_requested.emit)
+        self.enroll_face_btn.setVisible(False)
         face_btn_layout.addWidget(self.enroll_face_btn)
 
-        self.revoke_face_btn = QPushButton("Revoke Wajah")
+        self.revoke_face_btn = QPushButton("Cabut Wajah (Revoke)")
         self.revoke_face_btn.setStyleSheet(
             "QPushButton {"
             "   background-color: #F1F5F9; color: #DC2626; border: 1px solid #FECACA; padding: 6px 12px; border-radius: 5px; font-weight: 600; font-size: 11px;"

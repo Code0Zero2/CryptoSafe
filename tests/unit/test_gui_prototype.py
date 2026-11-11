@@ -114,6 +114,39 @@ class TestM1GuiPrototype(unittest.TestCase):
         self.assertEqual(self.window.stack.currentIndex(), 0)
         self.assertEqual(login_page.username_input.text(), "")
 
+    def test_registration_with_usb_and_face_id(self):
+        """Verifies registering a new account with USB token and Face ID."""
+        import tempfile
+        import numpy as np
+        login_page = self.window.login_page
+        register_page = self.window.register_page
+
+        # Switch to register
+        login_page.register_switch_button.click()
+        self.assertEqual(self.window.stack.currentIndex(), 2)
+
+        with tempfile.TemporaryDirectory() as tmp_usb:
+            usb_dir = Path(tmp_usb)
+            synthetic_face = np.zeros((120, 120, 3), dtype=np.uint8)
+
+            register_page.username_input.setText("charlie")
+            register_page.password_input.setText("CharlieSecret123!")
+            register_page.confirm_password_input.setText("CharlieSecret123!")
+            register_page.selected_usb_path = usb_dir
+            register_page.captured_face_frame = synthetic_face
+
+            register_page.register_button.click()
+
+            # Should redirect back to Login with username prefilled
+            self.assertEqual(self.window.stack.currentIndex(), 0)
+            self.assertEqual(login_page.username_input.text(), "charlie")
+
+            # Verify charlie exists and has USB token and Face profile
+            charlie_user = self.user_repo.get_by_username("charlie")
+            self.assertIsNotNone(charlie_user)
+            self.assertTrue(self.window._usb_service.has_active_token(charlie_user.id))
+            self.assertTrue(self.window._face_service.has_active_profile(charlie_user.id))
+
     def test_navigation_to_dashboard_and_logout(self):
         """Verifies demo navigation to dashboard with pre-seeded user and logout."""
         login_page = self.window.login_page
