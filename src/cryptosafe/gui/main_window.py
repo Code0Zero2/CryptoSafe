@@ -20,16 +20,19 @@ from cryptosafe.auth.face_service import FaceService
 from cryptosafe.crypto.text_crypto_service import TextCryptoService
 from cryptosafe.crypto.file_crypto_service import FileCryptoService
 from cryptosafe.crypto.steganography_service import SteganographyService
+from cryptosafe.crypto.blockchain_service import BlockchainService
 from cryptosafe.database.connection import get_connection
 from cryptosafe.database.schema import init_db
 from cryptosafe.database.user_repository import UserRepository
 from cryptosafe.database.usb_repository import UsbRepository
 from cryptosafe.database.face_repository import FaceRepository
 from cryptosafe.database.contract_repository import ContractRepository
+from cryptosafe.database.contract_service import ContractService
 from cryptosafe.database.encrypted_message_repository import EncryptedMessageRepository
 from cryptosafe.database.encrypted_message_service import EncryptedMessageService
 from cryptosafe.database.contract_file_repository import ContractFileRepository
 from cryptosafe.database.contract_file_service import ContractFileService
+from cryptosafe.database.blockchain_repository import BlockchainRepository
 from cryptosafe.common.errors import AuthenticationError, AuthenticationCancelledError, ValidationError
 
 logger = logging.getLogger("cryptosafe.gui")
@@ -45,6 +48,8 @@ class MainWindow(QMainWindow):
         text_crypto_service: TextCryptoService | None = None,
         file_crypto_service: FileCryptoService | None = None,
         contract_repository: ContractRepository | None = None,
+        contract_service: ContractService | None = None,
+        blockchain_service: BlockchainService | None = None,
         message_service: EncryptedMessageService | None = None,
         contract_file_service: ContractFileService | None = None,
         stego_service: SteganographyService | None = None,
@@ -109,6 +114,21 @@ class MainWindow(QMainWindow):
             )
         self._contract_file_service = contract_file_service
 
+        if blockchain_service is None:
+            blockchain_repo = BlockchainRepository(conn)
+            blockchain_service = BlockchainService(blockchain_repo)
+        self._blockchain_service = blockchain_service
+
+        if contract_service is None:
+            contract_service = ContractService(
+                contract_repository=self._contract_repository,
+                blockchain_service=self._blockchain_service,
+                contract_file_repository=getattr(self._contract_file_service, "_repository", None),
+                file_service=self._contract_file_service,
+                message_service=self._message_service,
+            )
+        self._contract_service = contract_service
+
         self._current_user = None
 
         self._setup_pages()
@@ -136,7 +156,7 @@ class MainWindow(QMainWindow):
         self.text_page = TextPage(text_crypto_service=self._text_crypto_service, parent=self)
         self.file_page = FilePage(file_crypto_service=self._file_crypto_service, parent=self)
         self.contract_page = ContractPage(
-            self._contract_repository,
+            self._contract_service,
             self._message_service,
             file_service=self._contract_file_service,
             parent=self,

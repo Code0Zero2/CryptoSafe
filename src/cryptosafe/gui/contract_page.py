@@ -19,13 +19,14 @@ class ContractPage(QWidget):
 
     def __init__(
         self,
-        contract_repository,
+        contract_service,
         message_service,
         file_service=None,
         parent=None,
     ):
         super().__init__(parent)
-        self._contract_repository = contract_repository
+        self._contract_service = contract_service
+        self._contract_repository = getattr(contract_service, "repository", contract_service)
         self._message_service = message_service
         self._file_service = file_service
         self._user_id = None
@@ -190,7 +191,7 @@ class ContractPage(QWidget):
         if self._user_id is None:
             return
 
-        contracts = self._contract_repository.list_by_user(self._user_id)
+        contracts = self._contract_service.list_by_user(self._user_id)
 
         for contract in contracts:
             row = self.contract_table.rowCount()
@@ -275,7 +276,7 @@ class ContractPage(QWidget):
             return
 
         try:
-            self._contract_repository.create_contract(
+            self._contract_service.create_contract(
                 contract_number=number_input.text(),
                 title=title_input.text(),
                 parties=parties_input.text(),
@@ -314,7 +315,7 @@ class ContractPage(QWidget):
             return
 
         try:
-            self._contract_repository.delete_contract(
+            self._contract_service.delete_contract(
                 contract_id, self._user_id
             )
             self.refresh_contracts()
@@ -331,7 +332,7 @@ class ContractPage(QWidget):
             return
 
         try:
-            self._contract_repository.update_status(
+            self._contract_service.update_status(
                 contract_id,
                 self._user_id,
                 self.status_combo.currentText(),
