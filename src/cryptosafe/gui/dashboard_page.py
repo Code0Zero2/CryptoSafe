@@ -24,6 +24,7 @@ class DashboardPage(QWidget):
     open_file_crypto_requested = Signal()
     open_contract_requested = Signal()
     open_steganography_requested = Signal()
+    open_audit_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -120,7 +121,7 @@ class DashboardPage(QWidget):
             (
                 "Verifikasi Integritas Aset",
                 "Ledger lokal hash chain berbasis SHA-256 untuk mendeteksi perubahan aset.",
-                "Milestone M10 — Direncanakan"
+                "Milestone M10 — Aktif"
             ),
         ]
 
@@ -282,6 +283,17 @@ class DashboardPage(QWidget):
             )
             self.btn_open_contract_card.clicked.connect(self.open_contract_requested.emit)
             layout.addWidget(self.btn_open_contract_card)
+
+            status_lbl = QLabel(f"Status: {status}")
+            status_lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #059669;")
+            layout.addWidget(status_lbl)
+        elif title == "Verifikasi Integritas Aset":
+            self.btn_open_audit = QPushButton("Buka Audit Blockchain →")
+            self.btn_open_audit.setStyleSheet(
+                "background-color: #4F46E5; color: white; padding: 6px; border-radius: 4px; font-weight: bold; font-size: 11px;"
+            )
+            self.btn_open_audit.clicked.connect(self.open_audit_requested.emit)
+            layout.addWidget(self.btn_open_audit)
 
             status_lbl = QLabel(f"Status: {status}")
             status_lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #059669;")
