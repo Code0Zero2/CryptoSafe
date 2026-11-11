@@ -34,6 +34,7 @@ MIN_PBKDF2_ITERATIONS = 100_000
 MAX_PBKDF2_ITERATIONS = 2_000_000
 SUPPORTED_SHAPES = {(4096,), (64, 64)}
 SUPPORTED_DTYPE = "float32"
+DEFAULT_FACE_THRESHOLD = 0.70
 
 
 def compute_face_aad(user_id: int) -> bytes:
@@ -79,17 +80,39 @@ class OpenCvFaceAdapter(FaceRecognizerAdapter):
             gray,
             scaleFactor=1.1,
             minNeighbors=4,
-            minSize=(30, 30)
+            minSize=(30, 30),
         )
+
+        # Fallback to slightly more sensitive detection if strict detection finds no face
+        if len(faces) == 0:
+            faces = self._face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.05,
+                minNeighbors=3,
+                minSize=(30, 30),
+            )
 
         if len(faces) > 0:
             # Pick largest detected face
             x, y, w, h = max(faces, key=lambda rect: rect[2] * rect[3])
             face_roi = gray[y:y+h, x:x+w]
+            logger.debug(
+                "Face detection: %d face(s) found in frame %s, primary box=(x=%d, y=%d, w=%d, h=%d)",
+                len(faces),
+                gray.shape,
+                int(x),
+                int(y),
+                int(w),
+                int(h),
+            )
         elif gray.shape[0] <= 128 and gray.shape[1] <= 128:
             # Pre-cropped face patch / fixture
             face_roi = gray
         else:
+            logger.warning(
+                "Face detection: 0 faces detected in frame of dimensions %s",
+                gray.shape,
+            )
             return None
 
         # Resize to standard dimensions
@@ -105,13 +128,49 @@ class OpenCvFaceAdapter(FaceRecognizerAdapter):
             return None
         return vec / vec_norm
 
-    def compute_similarity(self, template_a: np.ndarray, template_b: np.ndarray) -> float:
+    def compute_similarity(
+        self,
+        template_a: np.ndarray,
+        template_b: np.ndarray,
+        max_shift: int = 2,
+    ) -> float:
+        """Compute translation-tolerant cosine similarity score between two normalized templates.
+
+        Evaluates cosine similarity across small translational shifts [-max_shift, +max_shift]
+        to compensate for Haar Cascade bounding box jitter between distinct captures.
+        """
         if template_a is None or template_b is None:
             return 0.0
         if template_a.shape != template_b.shape:
             return 0.0
-        # Dot product of L2 normalized vectors gives cosine similarity
-        return float(np.dot(template_a, template_b))
+
+        vec_a = template_a.flatten()
+        vec_b = template_b.flatten()
+
+        best_sim = float(np.dot(vec_a, vec_b))
+
+        # If template represents 2D patch (e.g. 64x64 or 4096 elements) and max_shift > 0,
+        # compensate for small bounding-box jitter (dx, dy in [-max_shift, max_shift])
+        if max_shift > 0 and len(vec_a) == 4096:
+            patch_a = vec_a.reshape(64, 64)
+            patch_b = vec_b.reshape(64, 64)
+
+            for dy in range(-max_shift, max_shift + 1):
+                for dx in range(-max_shift, max_shift + 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    M = np.float32([[1, 0, dx], [0, 1, dy]])
+                    shifted_b = cv2.warpAffine(patch_b, M, (64, 64), borderMode=cv2.BORDER_REFLECT)
+                    s_vec = shifted_b.flatten()
+                    s_vec = s_vec - np.mean(s_vec)
+                    norm = np.linalg.norm(s_vec)
+                    if norm > 1e-7:
+                        s_vec = s_vec / norm
+                        sim = float(np.dot(vec_a, s_vec))
+                        if sim > best_sim:
+                            best_sim = sim
+
+        return float(np.clip(best_sim, -1.0, 1.0))
 
 class FaceService:
     """High-level face recognition service managing enrollment, template encryption, and verification."""
@@ -129,11 +188,14 @@ class FaceService:
         self._pbkdf2_iterations = pbkdf2_iterations
 
     def capture_camera_frame(self, camera_index: int = 0) -> np.ndarray:
-        """Capture a single image frame from local camera. Disposed immediately."""
+        """Capture a single image frame from local camera with sensor warm-up. Disposed immediately."""
         cap = cv2.VideoCapture(camera_index)
         if not cap.isOpened():
             raise AuthenticationError("Kamera tidak tersedia atau tidak dapat diakses.")
         try:
+            # Warm up sensor: discard initial underexposed/black frames
+            for _ in range(5):
+                cap.read()
             ret, frame = cap.read()
             if not ret or frame is None:
                 raise AuthenticationError("Gagal membaca frame gambar dari kamera.")
@@ -429,7 +491,7 @@ class FaceService:
         image: np.ndarray,
         password: str | None = None,
         key: bytes | None = None,
-        threshold: float = 0.75,
+        threshold: float = DEFAULT_FACE_THRESHOLD,
     ) -> bool:
         """Verify face in image against user's stored encrypted template."""
         profile = self._repo.get_active_by_user_id(user_id)
@@ -448,9 +510,23 @@ class FaceService:
             raise AuthenticationError("Wajah tidak terdeteksi pada kamera saat verifikasi.")
 
         similarity = self._adapter.compute_similarity(stored_template, probe_template)
-        # Note: We do NOT log biometric embeddings or images.
+
+        # Secure diagnostic logging (no biometric embeddings, images, or keys are logged)
+        logger.info(
+            "Face verification diagnostic for user_id=%s: similarity=%.4f, threshold=%.4f, match=%s",
+            user_id,
+            similarity,
+            threshold,
+            similarity >= threshold,
+        )
+
         if similarity < threshold:
-            logger.warning("Face biometric match failed for user_id=%s (similarity below threshold)", user_id)
+            logger.warning(
+                "Face biometric match failed for user_id=%s (similarity %.4f below threshold %.4f)",
+                user_id,
+                similarity,
+                threshold,
+            )
             raise AuthenticationError("Verifikasi wajah gagal: wajah tidak cocok.")
 
         # Auto-migrate legacy envelope to AAD-bound envelope upon successful face verification

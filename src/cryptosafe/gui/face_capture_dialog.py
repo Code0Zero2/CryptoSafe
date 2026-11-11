@@ -142,6 +142,13 @@ class CameraThread(QThread):
                     minNeighbors=4,
                     minSize=(30, 30),
                 )
+                if len(faces) == 0:
+                    faces = cascade.detectMultiScale(
+                        gray,
+                        scaleFactor=1.05,
+                        minNeighbors=3,
+                        minSize=(30, 30),
+                    )
                 if len(faces) > 0:
                     x, y, w, h = max(faces, key=lambda r: r[2] * r[3])
                     return (int(x), int(y), int(w), int(h))
@@ -183,6 +190,8 @@ class FaceCaptureDialog(QDialog):
         self._custom_thread = camera_thread
         self.captured_frame: np.ndarray | None = None
         self._last_raw_frame: np.ndarray | None = None
+        self._last_face_frame: np.ndarray | None = None
+        self._last_face_rect: tuple[int, int, int, int] | None = None
         self._camera_thread: CameraThread | None = None
 
         self._setup_ui()
@@ -310,6 +319,9 @@ class FaceCaptureDialog(QDialog):
     def _on_frame_ready(self, frame: np.ndarray, face_rect: tuple[int, int, int, int] | None):
         """Render received frame with bounding box and update guidance status."""
         self._last_raw_frame = frame
+        self._last_face_rect = face_rect
+        if face_rect is not None:
+            self._last_face_frame = frame.copy()
         self.capture_btn.setEnabled(True)
 
         display_frame = frame.copy()
@@ -390,8 +402,9 @@ class FaceCaptureDialog(QDialog):
 
     def _on_capture(self):
         """Accept dialog and preserve clean raw frame for cryptographic processing."""
-        if self._last_raw_frame is not None:
-            self.captured_frame = self._last_raw_frame.copy()
+        chosen_frame = self._last_face_frame if self._last_face_frame is not None else self._last_raw_frame
+        if chosen_frame is not None:
+            self.captured_frame = chosen_frame.copy()
             self.accept()
         else:
             QMessageBox.warning(self, "Peringatan", "Frame gambar belum tersedia.")

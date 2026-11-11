@@ -694,5 +694,77 @@ class TestM4FaceRecognition(unittest.TestCase):
             self.face_service._validate_template(invalid_dtype_int)
         self.assertIn("tipe data template", str(ctx.exception).lower())
 
+    def test_translation_jitter_tolerance(self):
+        """Verifies translation-tolerant similarity allows genuine face with 2-3px jitter to pass."""
+        # Create a smooth face patch with facial features
+        face_img = np.zeros((100, 100), dtype=np.uint8) + 120
+        face_img[35:45, 30:40] = 50
+        face_img[35:45, 60:70] = 50
+        face_img[45:65, 47:53] = 90
+        face_img[70:80, 35:65] = 60
+
+        self.face_service.enroll_face(
+            self.user_alice.id,
+            face_img,
+            user_consent=True,
+            password="AlicePass123",
+        )
+
+        # Shift face by 2 pixels (simulating slight camera/head movement)
+        shifted_face = np.roll(face_img, 2, axis=0)
+        shifted_face = np.roll(shifted_face, 2, axis=1)
+
+        # Must pass with DEFAULT_FACE_THRESHOLD (0.70)
+        verified = self.face_service.verify_face(
+            self.user_alice.id,
+            shifted_face,
+            password="AlicePass123",
+        )
+        self.assertTrue(verified)
+
+        # Bob's face must still fail
+        with self.assertRaises(AuthenticationError):
+            self.face_service.verify_face(
+                self.user_alice.id,
+                self.face_bob,
+                password="AlicePass123",
+            )
+
+    def test_diagnostic_logging_records_safe_metrics(self):
+        """Verifies diagnostic logs record similarity score and threshold without leaking secrets."""
+        self.face_service.enroll_face(
+            self.user_alice.id,
+            self.face_alice,
+            user_consent=True,
+            password="AlicePass123",
+        )
+
+        with self.assertLogs("cryptosafe.face", level="INFO") as cm:
+            self.face_service.verify_face(
+                self.user_alice.id,
+                self.face_alice_probe,
+                password="AlicePass123",
+            )
+
+        log_output = "\n".join(cm.output)
+        self.assertIn("similarity=", log_output)
+        self.assertIn("threshold=", log_output)
+        self.assertNotIn("AlicePass123", log_output)
+
+    def test_capture_camera_frame_warmup(self):
+        """Verifies capture_camera_frame discards warmup frames before returning."""
+        mock_cap = MagicMock()
+        mock_cap.isOpened.return_value = True
+        mock_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        mock_cap.read.return_value = (True, mock_frame)
+
+        with patch("cv2.VideoCapture", return_value=mock_cap):
+            frame = self.face_service.capture_camera_frame(camera_index=0)
+
+        self.assertIsNotNone(frame)
+        # 5 warmup reads + 1 final read = 6 calls
+        self.assertEqual(mock_cap.read.call_count, 6)
+        mock_cap.release.assert_called_once()
+
 if __name__ == "__main__":
     unittest.main()
